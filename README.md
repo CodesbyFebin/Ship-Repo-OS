@@ -52,6 +52,8 @@ The banner above is the committed 1280 × 640 PNG. The repository also includes 
 
 ## Quick start
 
+[Open the hosted Workbench](https://codesbyfebin.github.io/Ship-Repo-OS/) for browser audits, launch kits, utilities, and media. The local setup below runs the full Next.js app and its server-backed modes.
+
 Use Git, Node.js 24, and Bun 1.3.4, matching [CI](.github/workflows/ci.yml). The CLI media commands also require FFmpeg with librsvg and libx264.
 
 ```bash

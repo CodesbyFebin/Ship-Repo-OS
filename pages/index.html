@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Audit GitHub repositories, build launch kits, and run developer utilities in the ShipOS Workbench."
+    />
+    <meta name="color-scheme" content="dark" />
+    <title>ShipOS · GitHub Workbench</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <header class="shell top">
+      <a class="brand" href="./" aria-label="ShipOS home"
+        ><span aria-hidden="true">↗</span> ShipOS</a
+      >
+      <a href="https://github.com/CodesbyFebin/Ship-Repo-OS"
+        >View on GitHub ↗</a
+      >
+    </header>
+    <main class="shell">
+      <section class="hero" aria-labelledby="title">
+        <div class="hero-copy">
+          <p class="kicker">GITHUB WORKBENCH</p>
+          <h1 id="title">Get your repo ready to ship.</h1>
+          <p>
+            Audit repository evidence, assemble a launch kit, and run everyday
+            developer utilities in your browser.
+          </p>
+          <a class="button" href="#workbench">Open Workbench ↓</a>
+        </div>
+        <img
+          src="./media/shipos-readme-banner.png"
+          width="1280"
+          height="640"
+          alt="ShipOS — Audit. Build. Ship."
+        />
+      </section>
+      <div class="stats" aria-label="Workbench catalog">
+        <div><strong>40</strong><span>Audit checks</span></div>
+        <div><strong>30</strong><span>Launch assets</span></div>
+        <div><strong>30</strong><span>Developer utilities</span></div>
+      </div>
+      <section id="workbench" aria-labelledby="workbench-title">
+        <header class="section-head">
+          <p class="kicker">THE TOOLKIT</p>
+          <h2 id="workbench-title">Repository Workbench</h2>
+        </header>
+        <div role="tablist" aria-label="Workbench sections" class="tabs">
+          <button
+            type="button"
+            id="tab-audit"
+            role="tab"
+            aria-controls="audit"
+            aria-selected="true"
+          >
+            Audit
+          </button>
+          <button
+            type="button"
+            id="tab-kit"
+            role="tab"
+            aria-controls="kit"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Launch kit
+          </button>
+          <button
+            type="button"
+            id="tab-tools"
+            role="tab"
+            aria-controls="tools"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Utilities
+          </button>
+          <button
+            type="button"
+            id="tab-media"
+            role="tab"
+            aria-controls="media"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            Media
+          </button>
+        </div>
+        <p id="message" role="status" aria-live="polite" hidden></p>
+        <section
+          class="panel"
+          id="audit"
+          role="tabpanel"
+          aria-labelledby="tab-audit"
+        >
+          <h3>Run a repository audit</h3>
+          <p>
+            Import a public GitHub repository or paste an inventory. Inputs you
+            paste are processed in this tab.
+          </p>
+          <form id="import-form" class="inline">
+            <label
+              >Public GitHub repository<input
+                id="import-slug"
+                required
+                maxlength="160"
+                placeholder="owner/repository"
+            /></label>
+            <button class="secondary" type="submit">Import and audit</button>
+          </form>
+          <form id="audit-form">
+            <div class="fields">
+              <label
+                >File paths, one per line<textarea
+                  id="inventory"
+                  rows="7"
+                  maxlength="1500000"
+                  placeholder="README.md"
+                ></textarea>
+              </label>
+              <label
+                >Displayed README contents<textarea
+                  id="readme"
+                  rows="7"
+                  maxlength="524288"
+                  placeholder="# Project"
+                ></textarea>
+              </label>
+            </div>
+            <details>
+              <summary>Optional audit evidence</summary>
+              <div class="fields">
+                <label
+                  >File contents as JSON<textarea
+                    id="files-json"
+                    rows="4"
+                    maxlength="500000"
+                    placeholder='{"path":"text"}'
+                  ></textarea>
+                </label>
+                <label
+                  >GitHub settings as JSON<textarea
+                    id="metadata-json"
+                    rows="4"
+                    maxlength="10000"
+                    placeholder='{"protectedBranch":true,"topics":[]}'
+                  ></textarea>
+                </label>
+              </div>
+            </details>
+            <label class="check"
+              ><input id="complete" type="checkbox" /> This is a complete file
+              inventory</label
+            >
+            <div class="actions">
+              <button type="submit">Run audit</button
+              ><button type="button" id="audit-example" class="secondary">
+                Load example
+              </button>
+            </div>
+          </form>
+          <div id="audit-results" hidden>
+            <div class="result-head">
+              <div>
+                <h4 id="audit-score"></h4>
+                <p id="audit-counts"></p>
+              </div>
+              <button id="save-audit" class="secondary">
+                Download audit JSON
+              </button>
+            </div>
+            <label
+              >Filter findings
+              <select id="audit-filter">
+                <option value="all">All findings</option>
+                <option value="fail">Failed</option>
+                <option value="unknown">Unknown</option>
+                <option value="pass">Passed</option>
+                <option value="n/a">Not applicable</option>
+              </select>
+            </label>
+            <ul id="findings" class="findings"></ul>
+          </div>
+        </section>
+        <section
+          class="panel"
+          id="kit"
+          role="tabpanel"
+          aria-labelledby="tab-kit"
+          hidden
+        >
+          <h3>Build a GitHub launch kit</h3>
+          <p>
+            Preview and download 30 drafts. Existing paths from your audit
+            inventory are flagged for review.
+          </p>
+          <form id="kit-form">
+            <div class="fields">
+              <label
+                >GitHub repository<input
+                  id="kit-slug"
+                  maxlength="160"
+                  required
+                  placeholder="owner/repository"
+              /></label>
+              <label
+                >Verified description<input
+                  id="kit-description"
+                  maxlength="300"
+                  placeholder="What does the project do?"
+              /></label>
+            </div>
+            <button type="submit">Build launch kit</button>
+          </form>
+          <div id="kit-results" hidden>
+            <label>Preview an asset<select id="asset-select"></select></label>
+            <p id="asset-info"></p>
+            <pre id="asset-content"></pre>
+            <div class="actions">
+              <button id="save-kit">Download ZIP</button
+              ><button id="save-asset" class="secondary">
+                Download this file
+              </button>
+            </div>
+          </div>
+        </section>
+        <section
+          class="panel"
+          id="tools"
+          role="tabpanel"
+          aria-labelledby="tab-tools"
+          hidden
+        >
+          <h3>Use a developer utility</h3>
+          <p>
+            Transform Markdown, JSON, version numbers, GitHub links, captions,
+            and more.
+          </p>
+          <form id="tool-form">
+            <label>Utility<select id="tool-select"></select></label>
+            <label
+              >Input<textarea
+                id="tool-input"
+                rows="6"
+                maxlength="150000"
+              ></textarea>
+            </label>
+            <div class="actions">
+              <button type="submit">Run utility</button
+              ><button type="button" id="tool-example" class="secondary">
+                Load example
+              </button>
+            </div>
+          </form>
+          <div id="tool-results" hidden>
+            <label
+              >Output<textarea id="tool-output" rows="6" readonly></textarea>
+            </label>
+            <button id="save-tool" class="secondary">Download output</button>
+          </div>
+        </section>
+        <section
+          class="panel"
+          id="media"
+          role="tabpanel"
+          aria-labelledby="tab-media"
+          hidden
+        >
+          <h3>Launch media</h3>
+          <p>
+            Build a launch kit first to export its banner as a 1280 × 640 social
+            preview PNG.
+          </p>
+          <div id="custom-banner" hidden>
+            <img
+              id="banner-preview"
+              width="1280"
+              height="640"
+              alt="Generated banner preview"
+            />
+            <button id="save-png">Download banner PNG</button>
+          </div>
+          <video
+            controls
+            preload="none"
+            width="1280"
+            height="640"
+            poster="./media/social-preview.png"
+          >
+            <source src="./media/repo-teaser.mp4" type="video/mp4" />
+            <track
+              kind="captions"
+              label="English"
+              srclang="en"
+              src="./media/repo-teaser.vtt"
+            />
+          </video>
+          <p>
+            <a href="./media/repo-preview.gif">Looping GIF</a> ·
+            <a href="./media/repo-teaser.vtt">Captions</a> ·
+            <a
+              href="https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/docs/workbench.md#publish-the-media"
+              >Media CLI guide ↗</a
+            >
+          </p>
+        </section>
+      </section>
+      <aside class="note">
+        <strong>Need the full app?</strong>
+        <p>
+          This GitHub Pages edition runs the browser Workbench. The Next.js
+          server adds saved jobs, Full Package, Demo Maker, and the other
+          server-backed modes.
+          <a href="https://github.com/CodesbyFebin/Ship-Repo-OS#quick-start"
+            >Run the full app locally ↗</a
+          >
+        </p>
+      </aside>
+    </main>
+    <footer class="shell">
+      <span>ShipOS · MIT</span
+      ><a href="https://github.com/CodesbyFebin/Ship-Repo-OS/issues"
+        >Report an issue ↗</a
+      >
+    </footer>
+  </body>
+</html>
