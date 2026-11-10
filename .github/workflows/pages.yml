@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/pages.yml
-      - pages/**
+      - site-pages/**
       - scripts/build-pages.mjs
       - src/lib/shipos/workbench/**
       - docs/media/**
