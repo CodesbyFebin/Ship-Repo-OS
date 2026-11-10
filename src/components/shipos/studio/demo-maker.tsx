@@ -45,6 +45,7 @@ import {
 } from "@/ui";
 import type { CinemaFacts } from "@/lib/shipos/cinema-canvas";
 import { drawCinemaFrame } from "@/lib/shipos/cinema-canvas";
+import { downloadRecording, startCanvasRecording } from "@/lib/shipos/canvas-recording.mjs";
 import { buildDemoBrief, DEMO_STYLES, DEMO_TARGETS, type DemoStyle, type DemoTarget, type DemoVoice } from "@/lib/shipos/demo-shared";
 import type { DemoJobListItem, DemoJobResponse } from "@/lib/shipos/demo-runner";
 import { formatSrt, formatVtt, sceneAt, scriptCaptions, type VideoScript } from "@/lib/shipos/story-engine";
@@ -152,12 +153,21 @@ export function DemoMaker({
   useEffect(() => {
     if (!jobId) return;
     let stopped = false;
+    let failures = 0;
+    const controller = new AbortController();
     const tick = async () => {
       try {
-        const res = await fetch(`/api/demo/${jobId}`, { cache: "no-store" });
+        const res = await fetch(`/api/demo/${jobId}`, { cache: "no-store", signal: controller.signal });
+        if (res.status === 404 && !stopped) {
+          toast({ title: "Demo run unavailable", description: "The run may have been deleted. Choose another run or start a new one.", tone: "danger" });
+          setJobId(null);
+          setJob(null);
+          return;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as DemoJobResponse;
         if (stopped) return;
+        failures = 0;
         setJob(data);
         if (data.status === "processing") {
           pollTimer.current = setTimeout(tick, 2500);
@@ -172,12 +182,20 @@ export function DemoMaker({
           });
         }
       } catch {
-        if (!stopped) pollTimer.current = setTimeout(tick, 4000);
+        if (stopped) return;
+        if (++failures < 4) {
+          pollTimer.current = setTimeout(tick, failures * 2000);
+        } else {
+          toast({ title: "Demo status unreachable", description: "Reopen the run from history to resume checking progress.", tone: "danger" });
+          setJobId(null);
+          setJob(null);
+        }
       }
     };
     void tick();
     return () => {
       stopped = true;
+      controller.abort();
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [jobId, loadList]);
@@ -283,9 +301,10 @@ export function DemoMaker({
   const lastSceneRef = useRef<string | null>(null);
   const lastUiPush = useRef(0);
   const audioRef = useRef<{ ctx: AudioContext; gain: GainNode; oscs: OscillatorNode[]; dest: MediaStreamAudioDestinationNode } | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<ReturnType<typeof startCanvasRecording> | null>(null);
 
   const total = script?.totalDuration ?? 0;
+  useEffect(() => { recorderRef.current?.cancel(); }, [jobId]);
 
   const facts = useMemo(() => (job ? factsFromDemo(job) : null), [job]);
   useEffect(() => {
@@ -385,7 +404,7 @@ export function DemoMaker({
 
   const speakScene = useCallback(
     (sceneId: string) => {
-      if (!speakOn) return;
+      if (!speakOn || recorderRef.current) return;
       const scene = scriptRef.current?.scenes.find((s) => s.id === sceneId);
       if (!scene || typeof window === "undefined" || !window.speechSynthesis) return;
       cancelTts();
@@ -418,10 +437,7 @@ export function DemoMaker({
           playingRef.current = false;
           setPlaying(false);
           cancelTts();
-          stopMusic();
-          if (recorderRef.current && recorderRef.current.state === "recording") {
-            recorderRef.current.stop();
-          }
+          if (!recorderRef.current) stopMusic();
         }
       }
       const cv = canvasRef.current;
@@ -439,6 +455,7 @@ export function DemoMaker({
           });
         }
       }
+      if (s && timeRef.current >= s.totalDuration && recorderRef.current) recorderRef.current.finish();
       if (ts - lastUiPush.current > 120) {
         lastUiPush.current = ts;
         setTime(timeRef.current);
@@ -450,6 +467,7 @@ export function DemoMaker({
   }, [speakScene, cancelTts, stopMusic]);
 
   const togglePlay = () => {
+    if (recorderRef.current) return;
     if (!script?.scenes.length) return;
     const next = !playingRef.current;
     if (next && timeRef.current >= total - 0.01) {
@@ -472,6 +490,7 @@ export function DemoMaker({
   };
 
   const restart = () => {
+    if (recorderRef.current) return;
     timeRef.current = 0;
     lastSceneRef.current = null;
     setTime(0);
@@ -479,76 +498,79 @@ export function DemoMaker({
   };
 
   const seek = (t: number) => {
+    if (recorderRef.current) return;
     timeRef.current = Math.max(0, Math.min(total, t));
     lastSceneRef.current = null;
     setTime(timeRef.current);
     cancelTts();
   };
 
-  // ── WebM recorder (Path A export) ──────────────────────────────────────────
-  const recordWebm = () => {
-    const cv = canvasRef.current;
-    if (!cv || !script?.scenes.length || recording) return;
-    if (typeof MediaRecorder === "undefined") {
-      toast({ title: "Recording unavailable", description: "This browser does not expose MediaRecorder.", tone: "danger" });
-      return;
-    }
-    try {
-      const stream = cv.captureStream(30);
-      startMusic();
-      const a = audioRef.current;
-      if (a) a.dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+  // Browser export owns its capture stream and discards interrupted cuts.
+  useEffect(() => () => {
+    const recording = recorderRef.current;
+    recorderRef.current = null;
+    recording?.cancel();
+    playingRef.current = false;
+    cancelTts();
+    stopMusic();
+  }, [cancelTts, stopMusic]);
 
-      const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
-      const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: res === "4k" ? 24_000_000 : res === "1080p" ? 10_000_000 : 5_000_000 } : undefined);
-      const blobChunks: Blob[] = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) blobChunks.push(e.data);
-      };
-      rec.onstop = () => {
-        const blob = new Blob(blobChunks, { type: "video/webm" });
-        const url2 = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url2;
-        link.download = `${job?.repo ?? "shipos"}-demo-${res}.webm`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url2);
-        recorderRef.current = null;
-        setRecording(false);
-        cancelTts();
-        stopMusic();
-        toast({ title: "Demo WebM exported", description: `${(blob.size / 1_048_576).toFixed(1)} MB · visuals + cinematic score.`, tone: "success" });
-      };
-      recorderRef.current = rec;
-      // true cut: play from the top at 1x
-      speedRef.current = 1;
-      setSpeed(1);
+  const recordVideo = (includeMusic = true) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !script?.scenes.length || !Number.isFinite(total) || total <= 0 || recorderRef.current) return;
+    try {
+      canvas.scrollIntoView({ block: "center", behavior: "instant" });
+      cancelTts();
+      const withMusic = includeMusic && musicVol > 0;
+      if (withMusic) startMusic();
+      else stopMusic();
+      const audioTrack = withMusic ? audioRef.current?.dest.stream.getAudioTracks()[0] : undefined;
+      const videoBitsPerSecond = res === "4k" ? 24_000_000 : res === "1080p" ? 10_000_000 : 5_000_000;
       timeRef.current = 0;
+      setTime(0);
       lastSceneRef.current = null;
-      rec.start(250);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("The video canvas is unavailable.");
+      drawCinemaFrame(context, canvas.width, canvas.height, {
+        script, time: 0, facts: factsRef.current, ...optsRef.current,
+      });
+      const capture = startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond });
+      recorderRef.current = capture;
+      speedRef.current = 1;
       setRecording(true);
       playingRef.current = true;
       setPlaying(true);
-      const { scene } = sceneAt(script, 0);
-      if (scene) {
-        lastSceneRef.current = scene.id;
-        speakScene(scene.id);
-      }
-    } catch {
-      setRecording(false);
-      toast({ title: "Recorder failed", description: "Canvas capture is blocked in this context.", tone: "danger" });
+      void capture.done.then((result) => {
+        if (recorderRef.current !== capture) return;
+        recorderRef.current = null;
+        speedRef.current = speed;
+        playingRef.current = false;
+        setPlaying(false);
+        setRecording(false);
+        stopMusic();
+        if (result.status === "ready") {
+          try {
+            downloadRecording(result.blob, `${job?.repo ?? "shipos"}-demo-${res}.${result.extension}`);
+            toast({ title: "Video exported", description: `${(result.blob.size / 1_048_576).toFixed(1)} MB`, tone: "success" });
+          } catch {
+            toast({ title: "Download failed", description: "The browser could not download the exported video.", tone: "danger" });
+          }
+        } else if (result.status === "error" && result.reason === "empty" && audioTrack) {
+          toast({ title: "Retrying without music", description: "The browser returned an empty recording with the audio track attached." });
+          recordVideo(false);
+        } else if (result.status === "error") {
+          toast({ title: "Export interrupted", description: result.message, tone: "danger" });
+        }
+      });
+    } catch (error) {
+      stopMusic();
+      playingRef.current = false;
+      setPlaying(false);
+      toast({ title: "Recorder failed", description: error instanceof Error ? error.message : "Canvas recording could not start.", tone: "danger" });
     }
   };
 
-  const cancelRecording = () => {
-    if (recorderRef.current && recorderRef.current.state === "recording") recorderRef.current.stop();
-    playingRef.current = false;
-    setPlaying(false);
-    cancelTts();
-    stopMusic();
-  };
+  const cancelRecording = () => recorderRef.current?.cancel();
 
   // ── Render Cloud bridge (Path B) ───────────────────────────────────────────
   const sendToCloud = async () => {
@@ -744,13 +766,16 @@ export function DemoMaker({
             <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-inverse-surface px-3 py-1.5 font-mono text-label-sm text-inverse-on-surface">
               <span className="size-2 animate-pulse rounded-full bg-error" />
               REC {fmtClock(time)} / {fmtClock(total)}
+              <Button size="xs" variant="danger" icon={Square} onClick={cancelRecording}>
+                Cancel export
+              </Button>
             </div>
           )}
         </div>
 
         {/* timeline */}
         <div className="flex flex-col gap-1.5">
-          <Slider label="Timeline scrubber" hideLabel min={0} max={Math.max(1, total)} step={0.1} value={time} onChange={(e) => seek(Number(e.target.value))} />
+          <Slider label="Timeline scrubber" disabled={recording} hideLabel min={0} max={Math.max(1, total)} step={0.1} value={time} onChange={(e) => seek(Number(e.target.value))} />
           <div className="flex h-1.5 w-full gap-px overflow-hidden rounded-full">
             {actBounds.map((a, i) => (
               <div
@@ -771,14 +796,14 @@ export function DemoMaker({
 
         {/* transport + options */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="xs" className="w-[92px]" icon={playing ? Pause : Play} onClick={togglePlay}>
+          <Button size="xs" className="w-[92px]" icon={playing ? Pause : Play} onClick={togglePlay} disabled={recording}>
             {playing ? "Pause" : "Play"}
           </Button>
-          <Button size="xs" variant="outlined" icon={RotateCcw} onClick={restart}>
+          <Button size="xs" variant="outlined" icon={RotateCcw} onClick={restart} disabled={recording}>
             Restart
           </Button>
           <div className="flex items-center gap-2">
-            <Slider label="Playback speed" hideLabel min={0.5} max={2} step={0.5} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className="w-24" />
+            <Slider label="Playback speed" disabled={recording} hideLabel min={0.5} max={2} step={0.5} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className="w-24" />
             <span className="font-mono text-label-md text-on-surface-variant tnum">{speed}x</span>
           </div>
           <SegmentedButton
@@ -789,10 +814,10 @@ export function DemoMaker({
           />
           <div className="flex items-center gap-1.5">
             <Icon icon={Music} size="sm" className="text-on-surface-variant" />
-            <Slider label="Music volume" hideLabel min={0} max={100} value={musicVol} onChange={(e) => setMusicVol(Number(e.target.value))} className="w-24" />
+            <Slider label="Music volume" disabled={recording} hideLabel min={0} max={100} value={musicVol} onChange={(e) => setMusicVol(Number(e.target.value))} className="w-24" />
           </div>
           <Select
-            label="Resolution"
+            label="Resolution" disabled={recording}
             dense
             className="w-[190px]"
             value={res}
@@ -817,12 +842,12 @@ export function DemoMaker({
         <div className="flex flex-wrap gap-1.5">
           {[
             { on: captionsOn, set: setCaptionsOn, icon: Type, label: "Captions" },
-            { on: speakOn, set: setSpeakOn, icon: Mic, label: "Voiceover" },
+            { on: speakOn, set: setSpeakOn, icon: Mic, label: "Preview voice" },
             { on: kenBurns, set: setKenBurns, icon: Sparkles, label: "Ken Burns" },
             { on: neon, set: setNeon, icon: Sparkles, label: "Neon grade" },
             { on: grain, set: setGrain, icon: Sparkles, label: "Film grain" },
           ].map((t) => (
-            <Chip key={t.label} kind="filter" selected={t.on} icon={t.icon} onClick={() => t.set(!t.on)}>
+            <Chip key={t.label} kind="filter" selected={t.on} icon={t.icon} onClick={() => { if (!recorderRef.current) t.set(!t.on); }}>
               {t.label}
             </Chip>
           ))}
@@ -832,12 +857,10 @@ export function DemoMaker({
         <Card padding="sm" className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             {recording ? (
-              <Button size="xs" variant="danger" icon={Square} onClick={cancelRecording}>
-                Stop recording
-              </Button>
+              <span className="text-label-sm text-on-surface-variant">Export in progress</span>
             ) : (
-              <Button size="xs" icon={Download} onClick={recordWebm} disabled={!script.scenes.length}>
-                Download WebM
+              <Button size="xs" icon={Download} onClick={() => recordVideo()} disabled={!script.scenes.length}>
+                Export video
               </Button>
             )}
             <Button size="xs" variant="outlined" icon={Copy} onClick={() => void copyText(srt, "captions.srt")}>
@@ -845,6 +868,9 @@ export function DemoMaker({
             </Button>
             <Button size="xs" variant="outlined" icon={Copy} onClick={() => void copyText(vtt, "captions.vtt")}>
               Copy VTT
+            </Button>
+            <Button size="xs" variant="outlined" icon={Download} onClick={() => downloadText(`${job.repo}-captions.vtt`, vtt, "text/vtt")}>
+              Download captions
             </Button>
             <Button size="xs" variant="outlined" icon={Copy} onClick={() => void copyText(brief, "demo brief")}>
               Copy Brief
@@ -862,7 +888,7 @@ export function DemoMaker({
             </Button>
           </div>
           <p className="text-label-sm leading-relaxed text-on-surface-variant">
-            WebM export = canvas visuals + generated score (browsers don&apos;t expose TTS audio to recorders — the Render Cloud worker mixes the real voiceover).
+            Browser export includes canvas visuals and the generated music bed when available. Preview narration plays only in the browser. Keep the player visible in this tab during export.
             Schema JSON drops straight into Path B or any agent&apos;s hands.
           </p>
         </Card>
@@ -884,7 +910,7 @@ export function DemoMaker({
 
       {/* ── right: schema editor + scene map ──────────────────────────────── */}
       <div className="flex min-h-[420px] flex-col gap-3 lg:max-h-[calc(100vh-220px)]">
-        <SchemaEditor script={script} baseScript={readyScript ?? script} onChange={setScript} onSave={saveScript} saved={savedFlag} targetTotal={target} />
+        <SchemaEditor script={script} baseScript={readyScript ?? script} onChange={(next) => { if (!recorderRef.current) setScript(next); }} onSave={saveScript} saved={savedFlag} targetTotal={target} />
         <Card padding="sm" className="flex flex-col gap-2">
           <h4 className="flex items-center gap-2 font-mono text-label-md font-semibold uppercase tracking-widest text-on-surface-variant">
             <Icon icon={Gauge} size="sm" />
@@ -914,7 +940,7 @@ export function DemoMaker({
           behind every number.
         </p>
         {job && (
-          <Button size="xs" variant="text" icon={RotateCcw} onClick={() => { setJob(null); setJobId(null); setScript(null); }}>
+          <Button size="xs" variant="text" icon={RotateCcw} disabled={recording} onClick={() => { setJob(null); setJobId(null); setScript(null); }}>
             New run
           </Button>
         )}

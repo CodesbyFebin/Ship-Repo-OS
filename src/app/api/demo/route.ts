@@ -11,14 +11,17 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  let body: { repoUrl?: string; targetSeconds?: unknown; style?: unknown; voice?: unknown };
+  let body: { repoUrl?: unknown; targetSeconds?: unknown; style?: unknown; voice?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const repoUrl = (body.repoUrl ?? "").trim();
+  if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.repoUrl !== "string") {
+    return NextResponse.json({ ok: false, error: "Repository URL must be a string" }, { status: 400 });
+  }
+  const repoUrl = body.repoUrl.trim();
   if (!repoUrl) {
     return NextResponse.json({ ok: false, error: "Repository URL is required" }, { status: 400 });
   }
