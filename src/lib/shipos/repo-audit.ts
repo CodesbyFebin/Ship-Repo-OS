@@ -10,6 +10,7 @@ import type { RepoData } from "./types";
 import type { AuditRisk, CodeFix, RepoAudit, RepoAuditCategory, RepoAuditCheck, RoadmapStep, Strictness } from "./audit-types";
 import { DEFAULT_STRICTNESS, FIX_PRIORITY_ORDER, gradeFor, percentileFor, RISK_SEVERITY_ORDER, repoTier } from "./audit-types";
 import { countWords } from "./generators";
+import { countReadmeBadges, inspectDockerRuntime } from "./repo-evidence.mjs";
 import { FIX_BUILDERS, FIX_META, testCmdFor, installCmd, suggestedKeywords, type FixContext, type LinterKind } from "./fixes";
 
 /** Extra probes fetched by the pipeline before scoring. */
@@ -168,13 +169,6 @@ function readmeHas(repo: RepoData, re: RegExp): boolean {
   return !!repo.readme && re.test(repo.readme);
 }
 
-function countBadgeRows(md: string): number {
-  const badge = /(\[!\[[^\]]*\]\([^)]*\)\]|\[!\[[^\]]*\]\()[^\n]*/g;
-  const lines = new Set<string>();
-  for (const m of md.matchAll(badge)) lines.add(m[0].trim());
-  return lines.size;
-}
-
 // ── The rubric: 5 weighted categories · 50 checks · exactly 100 points ───────
 
 interface CheckDef {
@@ -254,7 +248,7 @@ const RUBRIC: CategoryDef[] = [
         weight: 3,
         fixId: "readme-upgrade",
         test: (repo, _scan, th) => {
-          const n = repo.readme ? countBadgeRows(repo.readme) : 0;
+          const n = repo.readme ? countReadmeBadges(repo.readme) : 0;
           return { pass: n >= th.badgeRows, detail: `${n} badge(s) found · target ≥ ${th.badgeRows}` };
         },
       },
@@ -549,11 +543,12 @@ const RUBRIC: CategoryDef[] = [
         label: "Dockerfile hardening",
         weight: 2,
         fixId: "dockerfile-hardening",
-        test: (repo) => {
+        test: (repo, scan) => {
           const hasDocker = rootHas(repo, /^dockerfile$/i);
           if (!hasDocker) return { pass: true, detail: "n/a — no Dockerfile in this repo", na: true };
           if (repo.offline) return { pass: true, detail: "Dockerfile present (contents not probeable offline)", na: true };
-          return { pass: false, detail: "Dockerfile detected — probe it for USER/non-root and pinned base (auto-hardening available)" };
+          const dockerfile = scan.raws.Dockerfile;
+          return dockerfile ? inspectDockerRuntime(dockerfile) : { pass: false, detail: "Dockerfile contents could not be verified." };
         },
       },
       {
@@ -795,7 +790,7 @@ const RUBRIC: CategoryDef[] = [
 const RISK_MAP: Record<string, { severity: AuditRisk["severity"]; title: string }> = {
   "sec-secrets": { severity: "critical", title: "Committed secrets detected" },
   "sec-env-gitignore": { severity: "high", title: "Environment files not protected" },
-  "sec-docker-nonroot": { severity: "high", title: "Dockerfile runs as root" },
+  "sec-docker-nonroot": { severity: "high", title: "Docker runtime hardening needs review" },
   "qa-gitignore": { severity: "high", title: "No .gitignore — secret leak risk" },
   "sec-workflow-pinning": { severity: "medium", title: "Unpinned GitHub Actions" },
   "sec-permissions": { severity: "medium", title: "Broad workflow token scope" },

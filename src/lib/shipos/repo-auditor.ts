@@ -55,7 +55,9 @@ export async function runAuditJob(jobId: string, repoUrl: string, strictness: St
     const needsGoMod = !repo.manifest && repo.rootFiles.some((f) => /^go\.mod$/i.test(f));
     const needsTsconfig = repo.rootFiles.some((f) => /^tsconfig\.json$/i.test(f));
 
-    const [wfResults, pyprojectRaw, cargoRaw, goModRaw, tsconfigRaw] = await Promise.all([
+    const dockerfile = repo.rootFiles.find((name) => /^dockerfile$/i.test(name));
+
+    const [wfResults, pyprojectRaw, cargoRaw, goModRaw, tsconfigRaw, dockerRaw] = await Promise.all([
       Promise.all(
         wfNames.map(async (name) => ({
           name,
@@ -66,12 +68,14 @@ export async function runAuditJob(jobId: string, repoUrl: string, strictness: St
       needsCargo ? fetchRaw(repo.owner, repo.repo, repo.defaultBranch, "Cargo.toml") : Promise.resolve(null),
       needsGoMod ? fetchRaw(repo.owner, repo.repo, repo.defaultBranch, "go.mod") : Promise.resolve(null),
       needsTsconfig ? fetchRaw(repo.owner, repo.repo, repo.defaultBranch, "tsconfig.json") : Promise.resolve(null),
+      dockerfile ? fetchRaw(repo.owner, repo.repo, repo.defaultBranch, dockerfile) : Promise.resolve(null),
     ]);
 
     scan.workflowContents = wfResults.filter((w) => w.content);
     if (pyprojectRaw) scan.raws["pyproject.toml"] = pyprojectRaw;
     if (cargoRaw) scan.raws["Cargo.toml"] = cargoRaw;
     if (goModRaw) scan.raws["go.mod"] = goModRaw;
+    if (dockerRaw) scan.raws.Dockerfile = dockerRaw;
     repo.tsconfigRaw = tsconfigRaw;
 
     // ── Stage 3: score — 50 deterministic checks across 5 categories ─────────
