@@ -1,6 +1,6 @@
 # ShipOS — The Universal Submission Engine
 
-![ShipOS repository launch banner](docs/media/social-preview.png)
+![ShipOS — Audit. Build. Ship.](docs/media/shipos-readme-banner.png)
 
 [Repository](https://github.com/CodesbyFebin/Ship-Repo-OS) · [Issues](https://github.com/CodesbyFebin/Ship-Repo-OS/issues) · [Pull requests](https://github.com/CodesbyFebin/Ship-Repo-OS/pulls) · [Looping GIF](docs/media/repo-preview.gif) · [MP4 teaser](docs/media/repo-teaser.mp4) · [Captions](docs/media/repo-teaser.vtt)
 
