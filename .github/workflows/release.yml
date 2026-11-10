@@ -1,0 +1,42 @@
+name: Publish a tagged release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Verify tag matches manifest
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e '
+            const version = require("./package.json").version;
+            if (!/^\d+\.\d+\.\d+$/.test(version) || process.env.RELEASE_TAG !== `v${version}`) {
+              throw new Error("Select a stable vX.Y.Z tag matching package.json.");
+            }'
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "A release for this tag already exists."
+            exit 0
+          fi
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "$RELEASE_TAG"

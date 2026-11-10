@@ -58,6 +58,11 @@ export async function POST(req: Request) {
     if (repo.rootFiles.some((f) => /^tsconfig\.json$/i.test(f))) {
       repo.tsconfigRaw = await fetchRaw(repo.owner, repo.repo, repo.defaultBranch, "tsconfig.json");
     }
+    const dockerfile = repo.rootFiles.find((name) => /^dockerfile$/i.test(name));
+    if (dockerfile) {
+      const raw = await fetchRaw(repo.owner, repo.repo, repo.defaultBranch, dockerfile);
+      if (raw) scan.raws.Dockerfile = raw;
+    }
     const audit = auditRepo(repo, scan, strictness);
 
     await db.apiKey.update({
