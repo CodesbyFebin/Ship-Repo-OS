@@ -15,7 +15,7 @@ class Recorder extends EventTarget {
   stop() {
     this.state = "inactive";
     const event = new Event("dataavailable");
-    event.data = new Blob(["frame"], { type: this.mimeType });
+    event.data = new Blob(this.empty ? [] : ["frame"], { type: this.mimeType });
     this.dispatchEvent(event);
     this.dispatchEvent(new Event("stop"));
   }
@@ -77,4 +77,13 @@ test("an unsolicited stop is treated as an interrupted export", async (t) => {
   const recording = startCanvasRecording(canvas, { videoBitsPerSecond: 1000 });
   Recorder.latest.stop();
   assert.equal((await recording.done).status, "error");
+});
+
+
+test("an empty finished recording returns a retryable failure", async (t) => {
+  const { canvas } = fixture(t);
+  const recording = startCanvasRecording(canvas, { videoBitsPerSecond: 1000 });
+  Recorder.latest.empty = true;
+  recording.finish();
+  assert.equal((await recording.done).reason, "empty");
 });

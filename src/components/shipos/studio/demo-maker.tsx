@@ -515,13 +515,15 @@ export function DemoMaker({
     stopMusic();
   }, [cancelTts, stopMusic]);
 
-  const recordVideo = () => {
+  const recordVideo = (includeMusic = true) => {
     const canvas = canvasRef.current;
     if (!canvas || !script?.scenes.length || !Number.isFinite(total) || total <= 0 || recorderRef.current) return;
     try {
       cancelTts();
-      startMusic();
-      const audioTrack = audioRef.current?.dest.stream.getAudioTracks()[0];
+      const withMusic = includeMusic && musicVol > 0;
+      if (withMusic) startMusic();
+      else stopMusic();
+      const audioTrack = withMusic ? audioRef.current?.dest.stream.getAudioTracks()[0] : undefined;
       const videoBitsPerSecond = res === "4k" ? 24_000_000 : res === "1080p" ? 10_000_000 : 5_000_000;
       timeRef.current = 0;
       setTime(0);
@@ -552,6 +554,9 @@ export function DemoMaker({
           } catch {
             toast({ title: "Download failed", description: "The browser could not download the exported video.", tone: "danger" });
           }
+        } else if (result.status === "error" && result.reason === "empty" && audioTrack) {
+          toast({ title: "Retrying without music", description: "The browser returned an empty recording with the audio track attached." });
+          recordVideo(false);
         } else if (result.status === "error") {
           toast({ title: "Export interrupted", description: result.message, tone: "danger" });
         }
@@ -852,7 +857,7 @@ export function DemoMaker({
                 Cancel export
               </Button>
             ) : (
-              <Button size="xs" icon={Download} onClick={recordVideo} disabled={!script.scenes.length}>
+              <Button size="xs" icon={Download} onClick={() => recordVideo()} disabled={!script.scenes.length}>
                 Export video
               </Button>
             )}

@@ -7,7 +7,7 @@ const FORMATS = [
 
 /**
  * @typedef {{status: "ready", blob: Blob, extension: "webm" | "mp4"} |
- *   {status: "cancelled"} | {status: "error", message: string}} RecordingResult
+ *   {status: "cancelled"} | {status: "error", message: string, reason?: "empty"}} RecordingResult
  */
 
 /**
@@ -73,8 +73,16 @@ export function startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond })
       if (settled) return;
       const type = mediaRecorder.mimeType || chunks[0]?.type || mimeType || "";
       const container = /^video\/(webm|mp4)(?:;|$)/i.exec(type)?.[1]?.toLowerCase();
-      if (!finishRequested || !chunks.length || (container !== "webm" && container !== "mp4")) {
-        settle({ status: "error", message: "The browser returned an incomplete or unsupported recording." });
+      if (!finishRequested) {
+        settle({ status: "error", message: "The recording ended before the cut was complete." });
+        return;
+      }
+      if (!chunks.length) {
+        settle({ status: "error", reason: "empty", message: "The browser returned an empty video." });
+        return;
+      }
+      if (container !== "webm" && container !== "mp4") {
+        settle({ status: "error", message: "The browser returned an unsupported video format." });
         return;
       }
       settle({ status: "ready", blob: new Blob(chunks, { type }), extension: container });
