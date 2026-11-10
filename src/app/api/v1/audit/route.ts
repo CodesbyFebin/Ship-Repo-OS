@@ -4,6 +4,7 @@ import { normalizeRepoUrl, ingestRepo, RepoNotFoundError } from "@/lib/shipos/in
 import { fetchRaw } from "@/lib/shipos/scrape";
 import { auditRepo, type AuditScan } from "@/lib/shipos/repo-audit";
 import { DEFAULT_STRICTNESS, type Strictness } from "@/lib/shipos/audit-types";
+import { hashApiKey, isPlainApiKey, storedApiKeyFields } from "@/lib/shipos/api-keys.mjs";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -22,7 +23,17 @@ export async function POST(req: Request) {
       { status: 401 }
     );
   }
-  const key = await db.apiKey.findUnique({ where: { key: apiKey } });
+  const hashed = hashApiKey(apiKey);
+  let key = await db.apiKey.findUnique({ where: { key: hashed } });
+  if (!key) {
+    const legacy = await db.apiKey.findUnique({ where: { key: apiKey } });
+    if (legacy && isPlainApiKey(legacy.key)) {
+      key = await db.apiKey.update({
+        where: { id: legacy.id },
+        data: storedApiKeyFields(apiKey),
+      });
+    }
+  }
   if (!key) {
     return NextResponse.json({ ok: false, error: "Unknown API key" }, { status: 401 });
   }
