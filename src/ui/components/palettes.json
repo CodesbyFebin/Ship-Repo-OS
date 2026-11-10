@@ -1,0 +1,21 @@
+[
+    { "id": "amnt-mint", "name": "AMNT Mint", "colors": ["#0F3D3E", "#1FA187", "#9BE3C8", "#F4FBF8"] },
+    { "id": "amnt-sunset", "name": "AMNT Sunset", "colors": ["#3D1F4E", "#E4572E", "#F3A712", "#FDF0D5"] },
+    { "id": "amnt-mono", "name": "AMNT Mono", "colors": ["#111111", "#555555", "#BBBBBB", "#FAFAFA"] },
+    { "id": "amnt-retro", "name": "Retro", "colors": ["#264653", "#2A9D8F", "#E9C46A", "#F4A261", "#E76F51"] },
+    { "id": "amnt-reef", "name": "Coral reef", "colors": ["#073B4C", "#118AB2", "#06D6A0", "#FFD166", "#EF476F"] },
+    { "id": "amnt-ocean", "name": "Ocean", "colors": ["#0B2545", "#13315C", "#1B98E0", "#8DA9C4", "#EEF4ED"] },
+    { "id": "amnt-ice", "name": "Ice", "colors": ["#03045E", "#0077B6", "#00B4D8", "#90E0EF", "#CAF0F8"] },
+    { "id": "amnt-forest", "name": "Forest", "colors": ["#1B4332", "#2D6A4F", "#52B788", "#B7E4C7", "#F1FAEE"] },
+    { "id": "amnt-olive", "name": "Olive", "colors": ["#283618", "#606C38", "#BC6C25", "#DDA15E", "#FEFAE0"] },
+    { "id": "amnt-autumn", "name": "Autumn", "colors": ["#3D2C2E", "#9C2C2C", "#D96C06", "#F2A541", "#F7E7CE"] },
+    { "id": "amnt-gold", "name": "Gold", "colors": ["#3B2F2F", "#8C6A2B", "#D4A020", "#F2D16B", "#FFF6D6"] },
+    { "id": "amnt-berry", "name": "Berry", "colors": ["#3A0CA3", "#7209B7", "#F72585", "#FFB3D9", "#FFF0F7"] },
+    { "id": "amnt-sakura", "name": "Sakura", "colors": ["#5C374C", "#985277", "#CE6A85", "#FF8C8C", "#FFE5EC"] },
+    { "id": "amnt-peach", "name": "Peach", "colors": ["#6D6875", "#B5838D", "#E5989B", "#FFB4A2", "#FFCDB2"] },
+    { "id": "amnt-lavender", "name": "Lavender", "colors": ["#2D1E4F", "#5E4B8B", "#9D8DF1", "#D6CCFF", "#F5F3FF"] },
+    { "id": "amnt-neon", "name": "Neon night", "colors": ["#0D0221", "#261447", "#F6019D", "#2DE2E6", "#FFE6F7"] },
+    { "id": "amnt-nordic", "name": "Nordic", "colors": ["#2E3440", "#4C566A", "#88C0D0", "#D8DEE9", "#ECEFF4"] },
+    { "id": "amnt-desert", "name": "Desert", "colors": ["#582F0E", "#936639", "#A68A64", "#C2C5AA", "#EDE0D4"] },
+    { "id": "amnt-candy", "name": "Candy", "colors": ["#22223B", "#FF6B6B", "#FFD93D", "#6BCB77", "#F7F7F7"] }
+]

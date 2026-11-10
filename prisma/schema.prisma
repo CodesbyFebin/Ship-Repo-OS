@@ -1,0 +1,254 @@
+// ShipOS — Universal Submission Engine + Full Repo Auditor
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ShipProject {
+  id            String   @id @default(cuid())
+  repoUrl       String
+  owner         String
+  repo          String
+  preset        String   @default("meta-hackathon")
+  // processing | ready | error
+  status        String   @default("processing")
+  // queued | ingesting | verifying | generating | scoring | done
+  stage         String   @default("queued")
+  repoJson      String?
+  ledgerJson    String?
+  artifactsJson String?
+  scoresJson    String?
+  error         String?
+  wordCount     Int      @default(0)
+  stars         Int      @default(0)
+  verifiedCount Int      @default(0)
+  rejectedCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model UpgradeJob {
+  id              String   @id @default(cuid())
+  repoUrl         String
+  owner           String
+  repo            String
+  // processing | ready | error
+  status          String   @default("processing")
+  // queued | ingesting | scoring | upgrading | auditing | done
+  stage           String   @default("queued")
+  error           String?
+  beforeScore     Int      @default(0)
+  afterScore      Int      @default(0)
+  beforeJson      String?
+  afterJson       String?
+  fixesJson       String?
+  repoMetaJson    String?
+  originalReadme  String?
+  upgradedReadme  String?
+  hadReadme       Boolean  @default(false)
+  wordCountBefore Int      @default(0)
+  wordCountAfter  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+model AuditJob {
+  id           String   @id @default(cuid())
+  repoUrl      String
+  owner        String
+  repo         String
+  // processing | ready | error
+  status       String   @default("processing")
+  // queued | ingesting | scanning | scoring | composing | done
+  stage        String   @default("queued")
+  // github | file-list
+  source       String   @default("github")
+  // lenient | balanced | strict
+  strictness   String   @default("balanced")
+  error        String?
+  score        Int      @default(0)
+  fixesCount   Int      @default(0)
+  checksFailed Int      @default(0)
+  auditJson    String?
+  repoMetaJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// ── PRO system ──────────────────────────────────────────────────────────────
+
+/// Single-row global PRO license state (demo checkout — no auth in this build).
+model ProState {
+  id          String    @id @default("main")
+  // FREE | PRO | TEAM
+  tier        String    @default("FREE")
+  // monthly | lifetime | team (empty for FREE)
+  plan        String    @default("")
+  activatedAt DateTime?
+  expiresAt   DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+/// Scheduled auto-audits (PRO feature): repo + cadence, toggled on/off.
+model ScheduledAudit {
+  id         String    @id @default(cuid())
+  repoUrl    String
+  owner      String
+  repo       String
+  // daily | weekly
+  frequency  String    @default("daily")
+  enabled    Boolean   @default(true)
+  lastScore  Int?
+  lastRunAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([enabled])
+}
+
+/// Public API keys (PRO TEAM feature) for /api/v1/audit.
+model ApiKey {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  label      String
+  usageCount Int      @default(0)
+  lastUsedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+/// Team members (PRO TEAM feature) with roles.
+model TeamMember {
+  id        String   @id @default(cuid())
+  name      String
+  handle    String
+  // OWNER | ADMIN | MEMBER | VIEWER
+  role      String   @default("MEMBER")
+  // active | invited
+  status    String   @default("invited")
+  createdAt DateTime @default(now())
+}
+
+// ── Story Engine v4.0 — Render Cloud (Path B: ZeroGPU 4K worker) ────────────
+
+/// A cinematic video render job in the free-GPU queue (HF Spaces ZeroGPU model).
+/// Path A renders in the browser; Path B stages the same scene schema through a
+/// quota-metered pipeline: GPU bursts (TTS · banner · captions) + CPU render
+/// (Remotion/ffmpeg, unlimited & free).
+model RenderJob {
+  id          String    @id @default(cuid())
+  auditJobId  String?
+  repoUrl     String
+  owner       String
+  repo        String
+  // meta-hackathon | yc-pitch | academic | product-launch
+  preset      String    @default("meta-hackathon")
+  // 1080p (free) | 4k (PRO)
+  resolution  String    @default("1080p")
+  // calm | energetic | authoritative
+  voice       String    @default("authoritative")
+  // queued | rendering | done | failed | canceled
+  status      String    @default("queued")
+  // queued | ingesting | verifying | tts | banners | captions | rendering | muxing | bundling | done
+  stage       String    @default("queued")
+  progress    Int       @default(0)
+  gpuSeconds  Int       @default(0)
+  etaSeconds  Int       @default(66)
+  quotaHeld   Boolean   @default(false) // true when parked: GPU budget exhausted today
+  scriptJson  String?   // snapshot of the editable scene schema at submit time
+  auditJson   String?   // snapshot of the audit for the bundle artifacts
+  metaJson    String?   // snapshot of repoMeta for the bundle artifacts
+  error       String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+/// Daily ZeroGPU budget ledger — 300 free GPU-seconds per UTC day.
+model GpuQuota {
+  date        String @id // YYYY-MM-DD (UTC)
+  secondsUsed Int    @default(0)
+}
+
+// ── Full Repo Optimization Engine — SEO / AEO / GEO → 100/100 ───────────────
+
+/// The Optimization Engine: ingests a repo, scores Search-SEO / Answer-Engine
+/// (AEO) / Generative-Engine (GEO) visibility before, then generates the full
+/// optimization pack (description · topics · agents.txt · llms.txt · FAQ ·
+/// JSON-LD · robots AI rules · launch copy) and re-scores to 100/100.
+model OptimizeJob {
+  id            String   @id @default(cuid())
+  repoUrl       String
+  owner         String
+  repo          String
+  // processing | ready | error
+  status        String   @default("processing")
+  // queued | ingesting | scoring | generating | auditing | done
+  stage         String   @default("queued")
+  error         String?
+  beforeJson    String?  // { seo, aeo, geo, overall } before-scores + per-item signal details
+  afterJson     String?  // legacy projected score field; current jobs leave this empty
+  artifactsJson String?  // description · topics · agentsTxt · llmsTxt · faq · jsonLd · robotsAi · keywords · social · meta
+  checklistJson String?  // all 54 catalog items with observed evidence and guidance
+  repoMetaJson  String?  // snapshot of the ingested repo metadata
+  packSource    String   @default("llm") // llm | fallback (template generator)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// ── Demo Maker — repo URL → 5-minute demo film (the /brag answer, long-form) ─
+
+/// A one-command demo film job: paste a repo URL, get a cinematic 5-minute
+/// (or 60s / 150s) demo video schema — 8-10 scenes, LLM voiceover with a
+/// deterministic template fallback, captions, brief, and a Render Cloud
+/// handoff. Same VideoScript contract as the Story Engine, so the player,
+/// SchemaEditor and WebM recorder all apply.
+model DemoJob {
+  id            String   @id @default(cuid())
+  repoUrl       String
+  owner         String
+  repo          String
+  // 60 | 150 | 300
+  targetSeconds Int      @default(300)
+  // launch | hackathon | academic | product
+  style         String   @default("launch")
+  // calm | energetic | authoritative
+  voice         String   @default("authoritative")
+  // processing | ready | error
+  status        String   @default("processing")
+  // queued | ingesting | writing | enhancing | done
+  stage         String   @default("queued")
+  // github | snapshot (repo fell back to the last good capture)
+  source        String   @default("github")
+  enhanced      Boolean  @default(false) // true when the LLM voiceover landed
+  error         String?
+  schemaJson    String?  // VideoScript — the full scene schema
+  metaJson      String?  // repo meta snapshot for the UI + bundle
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+/// "Was this fix helpful?" feedback per fix id.
+model Feedback {
+  id        String   @id @default(cuid())
+  fixId     String
+  helpful   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([fixId])
+}

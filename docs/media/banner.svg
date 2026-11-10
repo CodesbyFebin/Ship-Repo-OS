@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">ShipOS</title><desc id="description">Audit repos, build launch kits, and make demos.</desc>
+  <defs>
+    <linearGradient id="back" x2="100%" y2="100%"><stop stop-color="#09111f"/><stop offset="1" stop-color="#172744"/></linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M0 44V0H44" fill="none" stroke="#253c58"/></pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#back)"/>
+  <rect x="868" width="412" height="640" fill="url(#grid)" opacity=".7"/>
+  <path d="M907 392 1000 299 1064 363 1190 237M1130 237h60v60" fill="none" stroke="#6de5c1" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M76 76H1204M76 560H1204" stroke="#31425e" stroke-width="2"/>
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="76" y="145" fill="#6de5c1" font-size="25" font-weight="700">REPOSITORY WORKBENCH</text>
+    <text x="72" y="314" fill="#f3f7ff" font-size="92" font-weight="700">ShipOS</text>
+    <text x="76" y="394" fill="#b3c3da" font-size="23">Audit repos, build launch kits, and make demos.</text>
+    <text x="76" y="520" fill="#6de5c1" font-size="19">AUDIT  /  BUILD  /  SHIP</text>
+  </g>
+</svg>

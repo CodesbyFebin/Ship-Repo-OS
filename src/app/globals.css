@@ -1,0 +1,303 @@
+/* AMNT UI (Ink) — Material 3, ink-seeded (black & white; the art is the only colour). */
+@import "../ui/tokens/tokens.css";
+@import "../ui/tokens/legacy.css";
+@import "../ui/ui.css";
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Ink bridge — shadcn variable names resolve to AMNT UI colour roles.
+   One block serves light AND dark: each -rgb channel flips inside tokens.css.
+   Colours are roles, never values (AGENTS.md law 2). Corners are square on
+   purpose (law 4): --radius is 0, `rounded-small/medium/large` too.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Ink's type uses the app fonts; display takes the mono face. */
+  --font-geist-sans: system-ui, sans-serif;
+  --font-geist-mono: ui-monospace, monospace;
+  --font-brand: var(--font-geist-sans);
+  --font-brand-mono: ui-monospace, monospace;
+  --font-display: ui-monospace, monospace;
+
+  --radius: 0px;
+  --background: rgb(var(--md-sys-color-surface-rgb));
+  --foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --card: rgb(var(--md-sys-color-surface-container-rgb));
+  --card-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --popover: rgb(var(--md-sys-color-surface-container-rgb));
+  --popover-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --primary: rgb(var(--md-sys-color-primary-rgb));
+  --primary-foreground: rgb(var(--md-sys-color-on-primary-rgb));
+  --secondary: rgb(var(--md-sys-color-surface-container-high-rgb));
+  --secondary-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --muted: rgb(var(--md-sys-color-surface-container-high-rgb));
+  --muted-foreground: rgb(var(--md-sys-color-on-surface-variant-rgb));
+  --accent: rgb(var(--md-sys-color-surface-container-high-rgb));
+  --accent-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --destructive: rgb(var(--md-sys-color-error-rgb));
+  --destructive-foreground: rgb(var(--md-sys-color-on-error-rgb));
+  --border: rgb(var(--md-sys-color-outline-variant-rgb));
+  --input: rgb(var(--md-sys-color-outline-variant-rgb));
+  --ring: rgb(var(--md-sys-color-primary-rgb));
+  /* Charts speak the roles the system owns: ink, positive, premium, tertiary, error. */
+  --chart-1: rgb(var(--md-sys-color-primary-rgb));
+  --chart-2: rgb(var(--md-sys-color-positive-rgb));
+  --chart-3: rgb(var(--md-sys-color-premium-rgb));
+  --chart-4: rgb(var(--md-sys-color-tertiary-rgb));
+  --chart-5: rgb(var(--md-sys-color-error-rgb));
+  --sidebar: rgb(var(--md-sys-color-surface-container-low-rgb));
+  --sidebar-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --sidebar-primary: rgb(var(--md-sys-color-primary-rgb));
+  --sidebar-primary-foreground: rgb(var(--md-sys-color-on-primary-rgb));
+  --sidebar-accent: rgb(var(--md-sys-color-surface-container-high-rgb));
+  --sidebar-accent-foreground: rgb(var(--md-sys-color-on-surface-rgb));
+  --sidebar-border: rgb(var(--md-sys-color-outline-variant-rgb));
+  --sidebar-ring: rgb(var(--md-sys-color-primary-rgb));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  ::selection {
+    background: rgb(var(--md-sys-color-primary-rgb) / 0.28);
+    color: rgb(var(--md-sys-color-on-surface-rgb));
+  }
+}
+
+/* ── Scrollbars: outline hairline thumb, primary on hover ──────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--md-sys-color-outline-variant-rgb)) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--md-sys-color-outline-variant-rgb));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--md-sys-color-outline-rgb));
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── .md-body: styling for react-markdown output (role colours only) ───────── */
+.md-body {
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+.md-body > :first-child {
+  margin-top: 0;
+}
+.md-body h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 1.5rem 0 0.75rem;
+}
+.md-body h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1.5rem 0 0.6rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgb(var(--md-sys-color-outline-variant-rgb));
+}
+.md-body h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+}
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+}
+.md-body p {
+  margin: 0.6rem 0;
+}
+.md-body ul {
+  list-style: disc;
+  padding-left: 1.4rem;
+  margin: 0.6rem 0;
+}
+.md-body ol {
+  list-style: decimal;
+  padding-left: 1.4rem;
+  margin: 0.6rem 0;
+}
+.md-body li {
+  margin: 0.25rem 0;
+}
+.md-body li > ul,
+.md-body li > ol {
+  margin: 0.25rem 0;
+}
+.md-body a {
+  color: rgb(var(--md-sys-color-on-surface-rgb));
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--md-sys-color-outline-rgb) / 0.5);
+  text-underline-offset: 3px;
+}
+.md-body a:hover {
+  text-decoration-color: rgb(var(--md-sys-color-on-surface-rgb));
+}
+.md-body strong {
+  color: rgb(var(--md-sys-color-on-surface-rgb));
+  font-weight: 600;
+}
+.md-body blockquote {
+  border-left: 3px solid rgb(var(--md-sys-color-outline-variant-rgb));
+  padding: 0.15rem 0 0.15rem 1rem;
+  margin: 0.75rem 0;
+  color: rgb(var(--md-sys-color-on-surface-variant-rgb));
+}
+.md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.75rem 0;
+  display: block;
+  overflow-x: auto;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid rgb(var(--md-sys-color-outline-variant-rgb));
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+}
+.md-body th {
+  background: rgb(var(--md-sys-color-surface-container-rgb));
+  font-weight: 600;
+}
+.md-body hr {
+  border: 0;
+  border-top: 1px solid rgb(var(--md-sys-color-outline-variant-rgb));
+  margin: 1.25rem 0;
+}
+.md-body pre {
+  background: rgb(var(--md-sys-color-surface-container-rgb));
+  border: 1px solid rgb(var(--md-sys-color-outline-variant-rgb));
+  border-radius: 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+.md-body code {
+  background: rgb(var(--md-sys-color-surface-container-high-rgb));
+  padding: 0.12rem 0.35rem;
+  border-radius: 0;
+  font-size: 0.85em;
+  color: rgb(var(--md-sys-color-on-surface-rgb));
+}
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+  color: rgb(var(--md-sys-color-on-surface-rgb));
+  font-size: inherit;
+}
+.md-body img {
+  max-width: 100%;
+  border-radius: 0;
+}
+
+/* Hero banner HTML blocks injected via dangerouslySetInnerHTML */
+.hero-html table {
+  margin: 0;
+  border: none;
+}
+.hero-html img {
+  display: block;
+}
+
+/* ── Story Engine · Cinematic Narrator keyframes ───────────────────────────── */
+@keyframes cine-kenburns {
+  0%   { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.14) translate(-1.6%, -1.2%); }
+}
+@keyframes cine-kenburns-alt {
+  0%   { transform: scale(1.12) translate(1.4%, 1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+@keyframes cine-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cine-chime {
+  0%   { box-shadow: 0 0 0 0 rgb(var(--md-sys-color-primary-rgb) / 0); }
+  35%  { box-shadow: 0 0 90px 8px rgb(var(--md-sys-color-primary-rgb) / 0.35); }
+  100% { box-shadow: 0 0 0 0 rgb(var(--md-sys-color-primary-rgb) / 0); }
+}
+@keyframes cine-whoosh {
+  0%   { transform: scale(0.92); filter: blur(6px); }
+  55%  { transform: scale(1.02); filter: blur(0); }
+  100% { transform: scale(1); filter: blur(0); }
+}
+@keyframes cine-grain {
+  0%, 100% { background-position: 0 0; }
+  50%      { background-position: 34px 29px; }
+}
+
+/* AMNT UI: the page takes Ink's colours and font (dark mode = class="dark" on <html>). */
+body {
+  background: rgb(var(--md-sys-color-surface-rgb));
+  color: rgb(var(--md-sys-color-on-surface-rgb));
+  font-family: var(--md-sys-typescale-font);
+}

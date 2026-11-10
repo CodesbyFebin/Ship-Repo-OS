@@ -1,0 +1,30 @@
+name: Bug report
+description: Report a reproducible ShipOS problem
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - GitHub Workbench
+        - Full Package or Auditor
+        - Optimization Engine
+        - Demo Maker or Video Studio
+        - CLI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include ShipOS and runtime versions, input shape, and a public example if available.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Remove credentials, private source, and personal data from examples.
+    validations:
+      required: true

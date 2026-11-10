@@ -1,0 +1,636 @@
+/*
+ * @/ui — the CSS Tailwind cannot express.
+ *
+ * Five things live here and nothing else:
+ *   1. the M3 state layer and focus ring, ONE implementation for the system;
+ *   2. enter/exit motion for the native top layer (@starting-style, `overlay`
+ *      and `display` transitions, ::backdrop);
+ *   3. two keyframes;
+ *   4. the prompt bar's pills folding to icons on a phone (`:has`);
+ *   5. a picture that fails to load: a soft tile + the picture icon, never the
+ *      browser's torn-page icon (owner, 2026-09-30).
+ *
+ * Every value is a `--md-sys-*` token. Nothing is typed in. Browsers without
+ * @starting-style simply show and hide without animating.
+ */
+
+/* ── The M3 state layer ──────────────────────────────────────────────────
+ * M3 does not have hover colours. It has ONE mechanism: the component's own
+ * content colour, laid over it at a fixed opacity — 8% hover, 10% focus, 10%
+ * pressed, 16% dragged. That is why a filled button and a text button feel the
+ * same under the cursor without anyone picking a second colour for each.
+ *
+ * `currentColor` is what makes it work for every variant at once: on a filled
+ * button the content is `on-primary`, so the layer is white; on a text button
+ * it is `primary`, so the layer is purple. `isolation: isolate` + `z-index: -1`
+ * puts the layer above the component's background and below its label.
+ */
+.m3-state {
+  position: relative;
+  isolation: isolate;
+}
+.m3-state::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+/* Guarded on a real pointer: on a phone `:hover` sticks after a tap, which
+   would leave every tapped row permanently shaded. */
+@media (hover: hover) {
+  .m3-state:hover:not(:disabled):not([aria-disabled="true"])::after {
+    opacity: var(--md-sys-state-hover-opacity);
+  }
+}
+.m3-state:focus-visible::after { opacity: var(--md-sys-state-focus-opacity); }
+.m3-state:active:not(:disabled):not([aria-disabled="true"])::after { opacity: var(--md-sys-state-pressed-opacity); }
+.m3-state[data-dragging]::after { opacity: var(--md-sys-state-dragged-opacity); }
+/* Selected list rows, chips and nav items carry their layer permanently. */
+.m3-state[data-selected="true"]::after,
+.m3-state[aria-selected="true"]:not([role="tab"])::after,
+.m3-state[aria-current="page"]::after { opacity: var(--md-sys-state-hover-opacity); }
+.m3-state:disabled::after,
+.m3-state[aria-disabled="true"]::after { opacity: 0; }
+
+/* A menu or nav icon answers the pointer: it turns AMNT blue and swaps to
+   its filled path (Icon `hoverFill`). At rest every icon is plain ink - the
+   blue is the only colour, and only under the pointer (owner, 2026-10-09).
+   The current destination and a chosen row are left alone. */
+.m3-icon-hover { transition: color var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard); }
+.m3-icon-hover .m3-icon-f { display: none; }
+@media (hover: hover) {
+  :is(a, button, [role^="menuitem"]):not([aria-current="page"], [aria-checked="true"]):hover .m3-icon-hover { color: var(--md-sys-color-primary); }
+  :is(a, button, [role^="menuitem"]):hover .m3-icon-hover .m3-icon-o { display: none; }
+  :is(a, button, [role^="menuitem"]):hover .m3-icon-hover .m3-icon-f { display: inline; }
+}
+
+/* Rail destination (NavRailItem): the whole row is the target, the 56x32
+   pill carries the state layer - how m3.material.io's own rail behaves. */
+@media (hover: hover) {
+  .m3-rail:hover .m3-rail-pill::after { opacity: var(--md-sys-state-hover-opacity); }
+}
+.m3-rail:focus-visible .m3-rail-pill::after { opacity: var(--md-sys-state-focus-opacity); }
+.m3-rail:active .m3-rail-pill::after { opacity: var(--md-sys-state-pressed-opacity); }
+
+/* Controls are never pills (2026-10-09). One rule instead of ~240 edits:
+   a button or link written with `rounded-full` outside @/ui takes the same
+   8px corner as Button. A round picture inside (avatar), an inline colour
+   (a swatch dot) or a switch keeps its circle. Higher specificity than the
+   utility on purpose. */
+:is(button, a, [role="button"], [role="tab"], [role="radio"], [role="menuitem"]).rounded-full:not([role="switch"], [style*="background"], :has(img, video, canvas, svg image)) {
+  border-radius: var(--md-sys-shape-corner-small);
+}
+
+/* The one focus ring. `outline` never affects layout, so a focused control
+   cannot push its neighbours around. */
+.m3-focus:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+/* For a control whose real focus target is inside it (an iframe): the ring
+   goes on the box you can see. */
+.m3-focus-within:focus-within {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+/* On a filled surface the ring has to clear the fill, not the page. */
+.m3-focus-inverse:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+/* M3 disabled: content at 38%, container at 12% of `on-surface`. */
+.m3-disabled {
+  opacity: var(--md-sys-state-disabled-content-opacity);
+  pointer-events: none;
+}
+
+/* ── Menu, Tooltip and other popovers ───────────────────────────────── */
+.m3-pop {
+  margin: 0;
+  inset: auto;
+  opacity: 0;
+  translate: 0 -4px;
+  scale: 0.97;
+  transform-origin: var(--m3-pop-origin, top left);
+  /* Closing: short and accelerating - a menu leaves faster than it came. */
+  transition:
+    opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    translate var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized-accelerate),
+    scale var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-emphasized-accelerate),
+    overlay var(--md-sys-motion-duration-short3) allow-discrete,
+    display var(--md-sys-motion-duration-short3) allow-discrete;
+}
+/* Opening: M3 Expressive default spatial spring - it grows out of its
+   anchor and settles with a hair of overshoot; opacity on the effects
+   spring, which never overshoots. */
+.m3-pop:popover-open {
+  transition:
+    opacity var(--md-sys-motion-spring-fast-effects-duration) var(--md-sys-motion-spring-fast-effects),
+    translate var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial),
+    scale var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial),
+    overlay var(--md-sys-motion-spring-default-spatial-duration) allow-discrete,
+    display var(--md-sys-motion-spring-default-spatial-duration) allow-discrete;
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+}
+@starting-style {
+  .m3-pop:popover-open {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.97;
+  }
+}
+/* A tooltip is informational, not a surface arriving: it fades, it does not
+   grow. M3 gives it the shortest duration in the scale. */
+.m3-tip,
+.m3-tip:popover-open {
+  scale: 1;
+  translate: 0 0;
+  transition-duration: var(--md-sys-motion-duration-short2);
+  transition-timing-function: var(--md-sys-motion-easing-standard);
+}
+@starting-style {
+  .m3-tip:popover-open { opacity: 0; scale: 1; translate: 0 0; }
+}
+
+/* ── Prompt bar pills on a phone (components/Composer.tsx) ───────────────
+ * Under 600 px (M3 compact) a pill's words and chevron (`data-pill-label`)
+ * go, and the chip becomes a fixed 40 px circle round its icon. Long names
+ * never push the send button off the bar, and the row stops scrolling.
+ * The chip keeps its `aria-label`, and the tap opens the same menu.
+ */
+@media (max-width: 599.98px) {
+  .m3-bar-pills [data-pill-label] { display: none; }
+  .m3-bar-pills [data-chip]:has([data-pill-label]) {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    border-radius: var(--md-sys-shape-corner-small);
+  }
+  /* The chip and the bar share a surface, so an unset pill would read as a
+     bare glyph: M3's assist-chip outline, drawn inside so nothing moves. A
+     set pill keeps its secondary-container fill instead. */
+  .m3-bar-pills [data-chip]:has([data-pill-label]):not([data-selected]) {
+    box-shadow: inset 0 0 0 1px var(--md-sys-color-outline-variant);
+  }
+}
+
+/* Wider than a phone the pills keep their words, and a row of stroked chips
+   inside the bar read as a row of boxes: they are borderless there, the
+   state layer and the chevron say "tap me" (2026-09-28). */
+@media (min-width: 600px) {
+  .m3-bar-pills [data-chip]:not([data-selected]) { box-shadow: none; }
+}
+
+/* ── Toasts above an open Sheet (see liftToasts in Sheet.tsx) ────────── */
+/* The browser styles a popover as a centred box; the toast area is not one. */
+.m3-toast-layer[popover] {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+}
+.m3-toast-layer[popover] > * { pointer-events: auto; }
+
+/* ── Dialog, bottom sheet, side sheet ───────────────────────────────── */
+.m3-sheet {
+  opacity: 0;
+  transition:
+    opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard),
+    translate var(--md-sys-motion-duration-medium4) var(--md-sys-motion-easing-emphasized-decelerate),
+    scale var(--md-sys-motion-duration-medium4) var(--md-sys-motion-easing-emphasized-decelerate),
+    overlay var(--md-sys-motion-duration-medium4) allow-discrete,
+    display var(--md-sys-motion-duration-medium4) allow-discrete;
+}
+/* 🔴 `[open][data-placement]` as well, not just `[open]`: the placement rules
+   below are the SAME weight (class + one attribute) and come later, so they
+   won the tie and parked an OPEN sheet at its closed position - every bottom
+   sheet on a phone opened 100% below the screen, found live 2026-09-24. */
+.m3-sheet[open],
+.m3-sheet[open][data-placement] {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+}
+.m3-sheet::backdrop {
+  background: var(--md-sys-color-scrim);
+  opacity: 0;
+  transition:
+    opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+    overlay var(--md-sys-motion-duration-medium2) allow-discrete,
+    display var(--md-sys-motion-duration-medium2) allow-discrete;
+}
+/* The scrim role at 25%: the page stays visible, the popup has the focus. */
+.m3-sheet[open]::backdrop { opacity: 0.25; }
+@starting-style {
+  .m3-sheet[open]::backdrop { opacity: 0; }
+}
+
+.m3-sheet[data-placement="center"] { translate: 0 6px; scale: 0.96; }
+/* A centred dialog has no screen edge to overshoot past: it opens on the
+   default spatial spring. Sheets that slide from an edge keep the
+   decelerate curve above, so they never bounce off it. */
+.m3-sheet[data-placement="center"][open] {
+  transition:
+    opacity var(--md-sys-motion-spring-default-effects-duration) var(--md-sys-motion-spring-default-effects),
+    translate var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial),
+    scale var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial),
+    overlay var(--md-sys-motion-spring-default-spatial-duration) allow-discrete,
+    display var(--md-sys-motion-spring-default-spatial-duration) allow-discrete;
+}
+@starting-style {
+  .m3-sheet[data-placement="center"][open] { opacity: 0; translate: 0 6px; scale: 0.96; }
+}
+.m3-sheet[data-placement="bottom"] { translate: 0 100%; }
+@starting-style {
+  .m3-sheet[data-placement="bottom"][open] { opacity: 0; translate: 0 100%; }
+}
+.m3-sheet[data-placement="right"] { translate: 100% 0; }
+@starting-style {
+  .m3-sheet[data-placement="right"][open] { opacity: 0; translate: 100% 0; }
+}
+.m3-sheet[data-placement="left"] { translate: -100% 0; }
+@starting-style {
+  .m3-sheet[data-placement="left"][open] { opacity: 0; translate: -100% 0; }
+}
+
+/* ── Window: the one big popup ──────────────────────────────────────── */
+/* One 3:2 shape. --k scales it (lg 1, md .75, sm .6, xs .4); the width is
+   capped by the screen's width AND by its height, so the shape never bends.
+   The dialog is only the invisible frame: the surface is inside, so the ✕ can
+   sit outside the corner. Under 840 px (or a phone on its side) it is nearly
+   the whole screen, except `xs`, a small card. */
+.m3-window {
+  --k: 1;
+  width: calc(var(--k) * min(74rem, 100vw - 9rem, (100dvh - 6rem) * 1.5));
+  aspect-ratio: 3 / 2;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  max-width: none;
+  max-height: none;
+}
+.m3-window[data-size="md"] { --k: 0.75; }
+.m3-window[data-size="sm"] { --k: 0.6; }
+.m3-window[data-size="xs"] { --k: 0.4; }
+/* `tall`: a portrait card, not 3:2. For a short list that wants height, like
+   a wallet picker. On a phone it is the same near-full-screen sheet as the rest. */
+.m3-window[data-size="tall"]:not([data-full]) {
+  width: min(27rem, 100vw - 2rem);
+  height: min(46rem, 100dvh - 5rem);
+  aspect-ratio: auto;
+}
+/* A phone: nearly the whole screen. A strip of the page stays showing on top
+   (below the notch), so a thumb can pull the window down to close it. */
+.m3-window[data-full] {
+  width: 100vw;
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - 1.5rem);
+  aspect-ratio: auto;
+  margin: auto 0 0;
+}
+.m3-window[data-size="xs"]:not([data-full]) { min-width: min(24rem, 100vw - 2rem); }
+/* `fit`: a narrow card, as tall as its content (a form). Phone: the usual sheet. */
+.m3-window[data-size="fit"]:not([data-full]) { width: min(26rem, 100vw - 2rem); height: fit-content; max-height: calc(100dvh - 4rem); aspect-ratio: auto; }
+@media (max-width: 839px), (max-height: 520px) {
+  .m3-window[data-size="xs"] { width: min(26rem, 100vw - 2rem); }
+}
+
+/* ── Snackbar ───────────────────────────────────────────────────────── */
+/* Owner 2026-09-30: was too quick. A soft rise in, a soft sink out. */
+@keyframes m3-snackbar-in {
+  from { opacity: 0; translate: 0 0.75rem; scale: 0.97; }
+}
+@keyframes m3-snackbar-out {
+  to { opacity: 0; translate: 0 0.5rem; scale: 0.97; }
+}
+.m3-snackbar {
+  animation: m3-snackbar-in var(--md-sys-motion-duration-long2) var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+.m3-snackbar[data-leaving] {
+  animation: m3-snackbar-out var(--md-sys-motion-duration-medium4) var(--md-sys-motion-easing-emphasized-accelerate) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .m3-snackbar, .m3-snackbar[data-leaving] { animation-name: none; }
+}
+
+/* The download layer is a manual popover (top layer). Undo the popover's
+   own box: no border, padding, fill, and no stretch to the bottom edge. */
+.m3-download-layer[popover] {
+  bottom: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+/* ── Download card (components/Download.tsx) ──────────────────────────
+ * Drops in from the top like a notification; leaves up and out. The check
+ * pops once when the file is saved. */
+@keyframes m3-download-in {
+  from { opacity: 0; translate: 0 -1rem; scale: 0.96; }
+}
+@keyframes m3-download-out {
+  to { opacity: 0; translate: 0 -0.5rem; scale: 0.96; }
+}
+@keyframes m3-download-check {
+  from { scale: 0; }
+  60% { scale: 1.15; }
+}
+.m3-download {
+  animation: m3-download-in var(--md-sys-motion-spring-default-spatial-duration) var(--md-sys-motion-spring-default-spatial) both;
+}
+.m3-download[data-leaving] {
+  animation: m3-download-out var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-emphasized-accelerate) forwards;
+}
+.m3-download-check {
+  animation: m3-download-check var(--md-sys-motion-duration-medium1) var(--md-sys-motion-easing-emphasized-decelerate) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .m3-download, .m3-download-check { animation: none; }
+  .m3-download[data-leaving] { animation: none; opacity: 0; }
+}
+
+/* ── Placeholders (owner, 2026-10-04) ───────────────────────────────────
+ * ONE look for "something is on its way", CSS only: no canvas, no requests,
+ * nothing that can slow a draw. It is how Google, Claude and Linear do it:
+ * a flat tint of the page's own text colour, with a soft light band passing
+ * over it. No colour, no gradient blobs, no depth.
+ *
+ *   .m3-wash        LOADING - the thing exists and is arriving.
+ *   .m3-wash-draw   GENERATING - a 15-45 s wait. The same, slower and wider.
+ *
+ * 🔴 Theme roles only, no hex (it used to be a hand-picked purple/pink mesh:
+ * owner, 2026-10-04, "looks 3D, not professional"). The tint is `on-surface`
+ * at 8%, so it reads on every surface (page, card, window) in light and dark
+ * without being told which one it sits on.
+ *
+ * The band is the ::before, so the element keeps its own radius. Don't put
+ * .m3-border and .m3-wash on the SAME element: both draw ::before.
+ * Only transform moves. Reduced motion: the still tint.
+ */
+.m3-wash:not(.absolute) { position: relative; }
+.m3-wash {
+  overflow: hidden;
+  isolation: isolate;
+  background-color: rgb(var(--md-sys-color-on-surface-rgb) / 0.08);
+}
+.m3-wash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(var(--md-sys-color-on-surface-rgb) / 0.07) 50%, transparent 70%);
+  animation: m3-wash-sweep 1.6s var(--md-sys-motion-easing-standard) infinite;
+  will-change: transform;
+}
+.m3-wash-draw::before {
+  background: linear-gradient(100deg, transparent 20%, rgb(var(--md-sys-color-on-surface-rgb) / 0.07) 50%, transparent 80%);
+  animation-duration: 2.8s;
+}
+@keyframes m3-wash-sweep {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+/* Pixel sparkles in the GENERATING wash (PicturePlaceholder kind="draw").
+ * A 7x7 pixel twinkle, the ink at half strength, twinkling in steps so it
+ * reads as pixels, not a glow. Sized off the box, so a tiny tile gets tiny
+ * sparkles. Reduced motion: still and faint. */
+.m3-spark {
+  position: absolute;
+  width: 8%;
+  min-width: 7px;
+  max-width: 21px;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: rgb(var(--md-sys-color-on-surface-rgb) / 0.5);
+  /* A 7x7 pixel twinkle: long arms, a 3-wide heart. */
+  clip-path: polygon(42.86% 0, 57.14% 0, 57.14% 28.57%, 71.43% 28.57%, 71.43% 42.86%, 100% 42.86%, 100% 57.14%, 71.43% 57.14%, 71.43% 71.43%, 57.14% 71.43%, 57.14% 100%, 42.86% 100%, 42.86% 71.43%, 28.57% 71.43%, 28.57% 57.14%, 0 57.14%, 0 42.86%, 28.57% 42.86%, 28.57% 28.57%, 42.86% 28.57%);
+  animation: m3-spark 2.4s steps(4, jump-none) infinite;
+  scale: 0;
+}
+@keyframes m3-spark {
+  0%, 100% { scale: 0; }
+  40%, 55% { scale: 1; }
+}
+
+/* On an ink band (the sign-in popup), the sparkles are the page colour. */
+.m3-ink-band .m3-spark { width: 21px; background: rgb(var(--md-sys-color-inverse-on-surface-rgb) / 0.55); }
+.dark .m3-ink-band .m3-spark { background: rgb(var(--md-sys-color-on-surface-rgb) / 0.55); }
+/* The band is black in both themes; the lockup follows its text colour. */
+.m3-ink-band .text-on-surface { color: inherit; }
+
+/* The loader (Spinner): eight squares round a 3x3 grid, one light chasing
+ * round, the rest faint. currentColor, so it suits any surface. */
+.m3-pixload {
+  display: inline-grid;
+  flex-shrink: 0;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  gap: 12%;
+}
+.m3-pixload > i { background: currentColor; opacity: 0.15; animation: m3-pixload 0.96s linear infinite; }
+.m3-pixload > i:nth-child(5) { animation: none; opacity: 0; }
+.m3-pixload > i:nth-child(1) { animation-delay: -0.96s; }
+.m3-pixload > i:nth-child(2) { animation-delay: -0.84s; }
+.m3-pixload > i:nth-child(3) { animation-delay: -0.72s; }
+.m3-pixload > i:nth-child(6) { animation-delay: -0.6s; }
+.m3-pixload > i:nth-child(9) { animation-delay: -0.48s; }
+.m3-pixload > i:nth-child(8) { animation-delay: -0.36s; }
+.m3-pixload > i:nth-child(7) { animation-delay: -0.24s; }
+.m3-pixload > i:nth-child(4) { animation-delay: -0.12s; }
+@keyframes m3-pixload {
+  0% { opacity: 1; }
+  60%, 100% { opacity: 0.15; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .m3-spark { animation: none; scale: 1; opacity: 0.35; }
+  .m3-pixload > i { animation: none; opacity: 0.5; }
+}
+
+/* ── The selection border ──────────────────────────────────────────────
+ * THE border of the design system where a component wants an edge that
+ * shows: the selected tile, the picked style, the highlighted plan.
+ * 2026-10-09: a solid AMNT-blue band, still. It was a turning rainbow
+ * (2026-09-30); a moving multi-colour edge read as decoration, not as
+ * "this one is picked", and fought the art inside the tile.
+ * A ring drawn inside the box (::before), so nothing grows or moves.
+ *
+ *   .m3-border         always on          .m3-border-focus   on while focus is inside
+ *   .m3-border-hover   on while the pointer is over it, or focus is inside (plan cards)
+ * --m3-border-width sets the band (default 2px).
+ */
+.m3-border, .m3-border-focus, .m3-border-hover { position: relative; }
+.m3-border::before, .m3-border-focus::before, .m3-border-hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 var(--m3-border-width, 2px) var(--md-sys-color-primary);
+  transition: opacity var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+}
+.m3-border-focus:not(:focus-within)::before { opacity: 0; }
+.m3-border-hover:not(:hover, :focus-within)::before { opacity: 0; }
+
+/* ── Running indicator ──────────────────────────────────────────────── */
+@keyframes m3-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; }
+  70%, 100% { box-shadow: 0 0 0 5px transparent; }
+}
+.m3-pulse { animation: m3-pulse 1.8s var(--md-sys-motion-easing-standard) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m3-pulse { animation: none; }
+  .m3-state::after { transition: none; }
+}
+
+/* ── The grid (components/VirtualGrid.tsx) ───────────────────────────── */
+/* A picture that joins the grid grows in where it lands; the rest glide
+   aside (VirtualGrid's move transition). */
+@keyframes amnt-grid-enter {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.amnt-grid-enter > * {
+  animation: amnt-grid-enter var(--md-sys-motion-spring-slow-spatial-duration) var(--md-sys-motion-spring-slow-spatial) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .amnt-grid-enter > * { animation: none; }
+}
+/* The column count is a number the creator picks, not a Tailwind class, so it
+   comes through a CSS variable. 840 = M3 expanded: keep in step with
+   useGridColumns. `.nft-custom-grid` is the old name, same rule. */
+.amnt-grid, .nft-custom-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--mobile-cols, 3), minmax(0, 1fr));
+}
+@media (min-width: 840px) {
+  .amnt-grid, .nft-custom-grid {
+    grid-template-columns: repeat(var(--desktop-cols, 6), minmax(0, 1fr));
+  }
+}
+
+
+/* ── A picture that fails to load ────────────────────────────────────────
+ * Chrome and Firefox draw an <img>'s ::before ONLY when the picture failed,
+ * so this costs a loaded picture nothing and needs no JS on any page. The
+ * tile covers the torn-page icon and the alt text; the icon is Material
+ * Symbols "image" as a mask, so it takes the theme's colour in light and dark.
+ * Safari draws nothing for a failed img, which is already clean.
+ * :where() keeps it at zero weight: any class (absolute, fixed) still wins.
+ */
+:where(img) {
+  position: relative;
+}
+img::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: rgb(var(--md-sys-color-surface-container-highest-rgb));
+}
+img::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(2rem, 40%);
+  height: min(2rem, 40%);
+  background-color: rgb(var(--md-sys-color-on-surface-variant-rgb));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h600q24 0 42 18t18 42v600q0 24-18 42t-42 18H180Zm0-60h600v-600H180v600Zm86-97h429q8.5 0 12.75-8t-.75-16L590-457q-5-6-12-6t-12 6L446-302l-81-111q-5-6-12-6t-12 6l-86 112q-6 8-1.75 16t12.75 8Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M180-120q-24 0-42-18t-18-42v-600q0-24 18-42t42-18h600q24 0 42 18t18 42v600q0 24-18 42t-42 18H180Zm0-60h600v-600H180v600Zm86-97h429q8.5 0 12.75-8t-.75-16L590-457q-5-6-12-6t-12 6L446-302l-81-111q-5-6-12-6t-12 6l-86 112q-6 8-1.75 16t12.75 8Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/*
+ * Plates: a ground behind art that would vanish into the page (library tiles,
+ * owner 2026-10-09: "black outlines don't show in dark, white in light").
+ *
+ *   .m3-plate-for-dark    art drawn for a light page (black ink, outlines, most
+ *                         colour art): a light plate on a dark page, none on light
+ *   .m3-plate-for-light   white art: a dark plate on a light page, none on dark
+ *
+ * Variables, not `dark:` classes: they follow the NEAREST .light / .dark, so a
+ * light pack card on a dark page (class="light") gets the light-page answer.
+ */
+:root, .light {
+  --m3-plate-for-dark: transparent;
+  --m3-plate-for-light: var(--md-sys-color-inverse-surface);
+}
+.dark {
+  --m3-plate-for-dark: var(--md-sys-color-inverse-surface);
+  --m3-plate-for-light: transparent;
+}
+.m3-plate-for-dark { background-color: var(--m3-plate-for-dark); }
+.m3-plate-for-light { background-color: var(--m3-plate-for-light); }
+
+/* ── Display type is AMNT Pixel (Ink, 2026-10-21) ────────────────────────
+ * Tailwind's fontSize can't carry a family, so the Display roles pick it up
+ * here, breakpoint variants (`medium:text-display-lg`) included.
+ */
+[class*="text-display-"] { font-family: var(--md-sys-typescale-font-display); }
+/* A look with a tall caps face (themes.ts `display`, owner 2026-10-22): the
+ * kit sets data-kit-caps on <html> (or a preview wrapper). Anton has one
+ * weight, so no fake bold. */
+[data-kit-caps] [class*="text-display-"] {
+  text-transform: var(--kit-display-case); font-weight: var(--kit-display-weight); line-height: var(--kit-display-leading);
+}
+
+/* ── Code colours (src/ui/highlight.tsx, owner 2026-10-21) ──────────────
+ * GitHub's own editor palette, light and dark: proven contrast on a grey
+ * code card. The one place on the site, besides the art, with colour.
+ */
+:root, .light {
+  --code-key: #CF222E; --code-str: #0A3069; --code-num: #0550AE;
+  --code-fn: #8250DF; --code-tag: #116329; --code-com: #6E7781; --code-prop: #0550AE;
+}
+.dark {
+  --code-key: #FF7B72; --code-str: #A5D6FF; --code-num: #79C0FF;
+  --code-fn: #D2A8FF; --code-tag: #7EE787; --code-com: #8B949E; --code-prop: #79C0FF;
+}
+.tok-key { color: var(--code-key); }
+.tok-str { color: var(--code-str); }
+.tok-num { color: var(--code-num); }
+.tok-fn { color: var(--code-fn); }
+.tok-tag { color: var(--code-tag); }
+.tok-com { color: var(--code-com); }
+.tok-prop { color: var(--code-prop); }
+
+/* ── Inverse band (landing kit, owner 2026-10-22) ──────────────────────
+ * A dark band inside a light page (or the other way round): the roles flip,
+ * so every @/ui control inside it — filled and outlined buttons included —
+ * reads without knowing it sits on ink. Only the inverse-* roles are read,
+ * never written, so nothing loops.
+ */
+.kit-inverse {
+  --md-sys-color-surface: var(--md-sys-color-inverse-surface); --md-sys-color-surface-rgb: var(--md-sys-color-inverse-surface-rgb);
+  --md-sys-color-on-surface: var(--md-sys-color-inverse-on-surface); --md-sys-color-on-surface-rgb: var(--md-sys-color-inverse-on-surface-rgb);
+  --md-sys-color-on-surface-variant: var(--md-sys-color-inverse-on-surface); --md-sys-color-on-surface-variant-rgb: var(--md-sys-color-inverse-on-surface-rgb);
+  --md-sys-color-primary: var(--md-sys-color-inverse-on-surface); --md-sys-color-primary-rgb: var(--md-sys-color-inverse-on-surface-rgb);
+  --md-sys-color-on-primary: var(--md-sys-color-inverse-surface); --md-sys-color-on-primary-rgb: var(--md-sys-color-inverse-surface-rgb);
+  --md-sys-color-outline-variant: var(--md-sys-color-inverse-on-surface); --md-sys-color-outline-variant-rgb: var(--md-sys-color-inverse-on-surface-rgb);
+  background-color: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface);
+}
+
+/* ── Look picker (components/ThemeKit.tsx) ───────────────────────────────
+ * A look sets one font for every word; code still needs a monospace to
+ * line up, so it keeps the site's own. */
+html[data-kit] :is(pre, code, kbd) { font-family: var(--font-brand-mono), ui-monospace, monospace; }
