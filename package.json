@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "lint:workbench": "eslint src/components/shipos/workbench.tsx src/lib/shipos/workbench scripts",
     "workbench": "node scripts/workbench.mjs",
+    "evidence": "node scripts/evidence.mjs",
     "test:coverage": "node --experimental-test-coverage --test-coverage-include=\"src/lib/shipos/workbench/**\" --test tests/*.test.mjs",
     "audit": "bun audit --audit-level=high"
   },
