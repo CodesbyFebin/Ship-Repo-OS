@@ -1,0 +1,31 @@
+services:
+  db-init:
+    build:
+      context: .
+      target: build
+    user: node
+    environment:
+      DATABASE_URL: file:/data/shipos.db
+    volumes:
+      - database:/data
+    command: ["sh", "-ec", "touch /data/shipos.db && npm run db:push -- --skip-generate"]
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DATABASE_URL: file:/data/shipos.db
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - database:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/projects').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+volumes:
+  database:

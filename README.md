@@ -156,6 +156,8 @@ Run each script as `bun run <script>`. See [package.json](package.json) for its 
 | `build` | Runs `next build` and copies static assets into the standalone bundle. |
 | `start` | `node .next/standalone/server.js` |
 | `test` | `node --test tests/*.test.mjs` |
+| `test:coverage` | Runs the regression tests and reports coverage for the shared Workbench modules. |
+| `audit` | Runs Bun’s dependency audit for high and critical advisories. |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | `eslint .` |
 | `lint:workbench` | ESLint for the Workbench UI, shared modules, and CLI scripts. |
@@ -194,16 +196,21 @@ Job creation returns `{ ok, id }`. Poll `GET /api/projects/:id` for a full packa
 ## Testing and continuous integration
 
 ```bash
-bun run test
+bun run test:coverage
 bun run lint:workbench
 bun run typecheck
+bun run audit
 ```
 
-The [Repository checks workflow](.github/workflows/ci.yml) runs on pushes and pull requests and supports manual runs. It installs locked dependencies, generates the Prisma client, tests and lints Workbench, checks types, and builds the standalone app. See [current runs](https://github.com/CodesbyFebin/Ship-Repo-OS/actions/workflows/ci.yml) and the [release review](docs/release-review.md) for the original verification and lint scope.
+The [Repository checks workflow](.github/workflows/ci.yml) runs on pushes and pull requests and supports manual runs. It installs locked dependencies, generates the Prisma client, tests and lints Workbench, checks types, and builds the standalone app on Node.js 22 and 24. A container smoke test exercises a fresh SQLite volume. The dependency audit is a separate command and can report advisories even when the build passes. See [current runs](https://github.com/CodesbyFebin/Ship-Repo-OS/actions/workflows/ci.yml) and the [release review](docs/release-review.md) for the original verification and lint scope.
 
 ## Deployment
 
 Run `bun run build && bun run start` for the standalone Node.js build. Set the same absolute `DATABASE_URL` during schema setup and at runtime, and use a writable persistent volume for SQLite. The included [Caddyfile](Caddyfile) is a reverse-proxy example. For the 4K render workflow, use the separate export from Render Cloud.
+
+For a local container deployment, run `docker compose up --build --wait`. Compose applies the Prisma schema in a one-time initialization service, stores SQLite in a named volume, and publishes the app on `127.0.0.1:3000`. Stop it with `docker compose down` to keep the data volume.
+
+To publish a GitHub release, dispatch the [release workflow](.github/workflows/release.yml) against an existing stable `vX.Y.Z` tag that matches `package.json`.
 
 ## Security
 
@@ -216,7 +223,7 @@ Run the server as a trusted single-instance demo. The shared job, project, and d
 | Stars and forks | Live badges above or the [GitHub repository](https://github.com/CodesbyFebin/Ship-Repo-OS). The supplied November 10 snapshot recorded zero of each. |
 | Commit count and contributors | [Main history](https://github.com/CodesbyFebin/Ship-Repo-OS/commits/main/) and the dated snapshot below. |
 | Languages | The supplied November 10 snapshot reported 71% TypeScript and 29% JavaScript. See the [repository language breakdown](https://github.com/CodesbyFebin/Ship-Repo-OS) for current figures. |
-| Automation and tests | One [CI workflow](.github/workflows/ci.yml) and the [Workbench regression suite](tests/workbench.test.mjs). |
+| Automation and tests | [CI](.github/workflows/ci.yml), [CodeQL](.github/workflows/codeql.yml), [tagged releases](.github/workflows/release.yml), and the [Workbench regression suite](tests/workbench.test.mjs). |
 | License | [MIT](LICENSE). |
 
 ## Commit intelligence
@@ -272,7 +279,7 @@ This table is also the citable facts index for the project. Sources point to the
 | The full package includes an evidence ledger. | [Provenance verifier](src/lib/shipos/provenance.ts) · [Package pipeline](src/lib/shipos/pipeline.ts) |
 | Demo Maker prepares voiceover scripts and film scenes. | [Demo engine](src/lib/shipos/demo-engine.ts) · [Demo runner](src/lib/shipos/demo-runner.ts) |
 | The optimization pack provides SEO, AEO, and GEO guidance. | [Optimizer](src/lib/shipos/optimizer.ts) · [Catalog](src/lib/shipos/optimize-catalog.ts) |
-| The repository has a CI workflow, automated tests, and an MIT license. | [Workflow](.github/workflows/ci.yml) · [Tests](tests/) · [License](LICENSE) |
+| The repository has CI, automated tests, and an MIT license. | [Workflow](.github/workflows/ci.yml) · [Tests](tests/) · [License](LICENSE) |
 | The repository is public and has a traceable development history. | [Repository](https://github.com/CodesbyFebin/Ship-Repo-OS) · [Snapshot commit](https://github.com/CodesbyFebin/Ship-Repo-OS/commit/724a8c752d1555a4cdca7be2f0f75cc9b061a6d9) |
 
 <details>

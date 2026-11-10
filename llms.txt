@@ -1,0 +1,11 @@
+# ShipOS
+
+> A GitHub repository workbench for evidence-based audits, launch assets, developer utilities, and demo production.
+
+## Documentation
+
+- [README](https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/README.md): Setup, modes, architecture, and API examples.
+- [Workbench guide](https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/docs/workbench.md): Local audit, readiness and coverage, launch kit, and media commands.
+- [Contributing](https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/CONTRIBUTING.md): Development and verification steps.
+- [Security](https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/SECURITY.md): Disclosure and deployment boundaries.
+- [Changelog](https://github.com/CodesbyFebin/Ship-Repo-OS/blob/main/CHANGELOG.md): Version history.

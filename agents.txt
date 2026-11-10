@@ -1,0 +1,11 @@
+# ShipOS repository orientation
+
+ShipOS is a private package in a public GitHub source repository. Clone the repository and install with Bun. The package is run from a checkout.
+
+- README.md documents the app, Workbench CLI, configuration, and media exports.
+- CONTRIBUTING.md describes the contribution and verification workflow.
+- SECURITY.md explains private reporting and the limits of the single-instance demo.
+- src/lib/shipos/workbench/ contains the shared evidence, launch pack, and utility logic.
+- scripts/workbench.mjs is the local CLI, and tests/workbench.test.mjs covers it.
+- Run bun run test, bun run lint:workbench, and bun run typecheck before proposing changes.
+- Preserve the distinction between measured audit evidence, generated drafts, and release settings.
