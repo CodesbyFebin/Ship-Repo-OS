@@ -25,6 +25,8 @@ export function startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond })
   const chunks = [];
   /** @type {MediaRecorder | undefined} */
   let recorder;
+  /** @type {IntersectionObserver | undefined} */
+  let visibilityObserver;
   let stopTimer;
   let finishRequested = false;
   let settled = false;
@@ -38,6 +40,7 @@ export function startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond })
     if (settled) return;
     settled = true;
     clearTimeout(stopTimer);
+    visibilityObserver?.disconnect();
     document.removeEventListener("visibilitychange", onVisibility);
     if (recorder && recorder.state !== "inactive") {
       try {
@@ -89,6 +92,14 @@ export function startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond })
     });
     document.addEventListener("visibilitychange", onVisibility);
     mediaRecorder.start(250);
+    if (canvas.isConnected && typeof IntersectionObserver !== "undefined") {
+      visibilityObserver = new IntersectionObserver(([entry]) => {
+        if (entry && !entry.isIntersecting) {
+          settle({ status: "error", message: "The video player left the viewport. Keep it in view during export." });
+        }
+      });
+      visibilityObserver.observe(canvas);
+    }
     return {
       done,
       finish() {

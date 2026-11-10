@@ -380,6 +380,7 @@ export function VideoStudio({
     const canvas = canvasRef.current;
     if (!canvas || !script?.scenes.length || !Number.isFinite(total) || total <= 0 || recorderRef.current) return;
     try {
+      canvas.scrollIntoView({ block: "center", behavior: "instant" });
       cancelTts();
       const withMusic = includeMusic && musicVol > 0;
       if (withMusic) startMusic();
@@ -545,6 +546,9 @@ export function VideoStudio({
                 <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-inverse-surface px-3 py-1.5 font-mono text-label-sm text-inverse-on-surface">
                   <span className="size-2 animate-pulse rounded-full bg-error" />
                   REC {fmtClock(time)} / {fmtClock(total)}
+              <Button size="xs" variant="danger" icon={Square} onClick={cancelRecording}>
+                Cancel export
+              </Button>
                 </div>
               )}
             </div>
@@ -658,9 +662,7 @@ export function VideoStudio({
             <Card padding="sm" className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {recording ? (
-                  <Button size="xs" variant="danger" icon={Square} onClick={cancelRecording}>
-                    Cancel export
-                  </Button>
+                  <span className="text-label-sm text-on-surface-variant">Export in progress</span>
                 ) : (
                   <Button size="xs" icon={Download} onClick={() => recordVideo()} disabled={!script.scenes.length}>
                     Export video
@@ -688,7 +690,7 @@ export function VideoStudio({
                 </Button>
               </div>
               <p className="text-label-sm leading-relaxed text-on-surface-variant">
-                Browser export includes canvas visuals and the generated music bed when available. Preview narration plays only in the browser. Keep this tab visible during export.
+                Browser export includes canvas visuals and the generated music bed when available. Preview narration plays only in the browser. Keep the player visible in this tab during export.
               </p>
             </Card>
 

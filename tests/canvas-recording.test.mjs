@@ -87,3 +87,21 @@ test("an empty finished recording returns a retryable failure", async (t) => {
   recording.finish();
   assert.equal((await recording.done).reason, "empty");
 });
+
+test("a player scrolled out of view aborts and disconnects its observer", async (t) => {
+  const { canvas } = fixture(t);
+  canvas.isConnected = true;
+  const oldObserver = globalThis.IntersectionObserver;
+  let callback;
+  let disconnected = false;
+  globalThis.IntersectionObserver = class {
+    constructor(handler) { callback = handler; }
+    observe() {}
+    disconnect() { disconnected = true; }
+  };
+  t.after(() => { globalThis.IntersectionObserver = oldObserver; });
+  const recording = startCanvasRecording(canvas, { videoBitsPerSecond: 1000 });
+  callback([{ isIntersecting: false }]);
+  assert.match((await recording.done).message, /viewport/);
+  assert.equal(disconnected, true);
+});
