@@ -63,7 +63,8 @@ interface ScheduledItem {
 
 interface ApiKeyItem {
   id: string;
-  key: string;
+  key?: string;
+  masked?: string;
   label: string;
   usageCount: number;
   lastUsedAt: string | null;
@@ -474,38 +475,54 @@ function ScheduledAudits({
 
 // ── API Keys (TEAM) ──────────────────────────────────────────────────────────
 
+function adminHeaders(token: string, json = false): HeadersInit {
+  const headers: Record<string, string> = { "x-shipos-admin-token": token };
+  if (json) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
 function ApiKeysSection({ team, onUpgrade }: { team: boolean; onUpgrade: () => void }) {
   const [items, setItems] = useState<ApiKeyItem[]>([]);
   const [label, setLabel] = useState("");
+  const [adminToken, setAdminToken] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [origin] = useState(() => (typeof window !== "undefined" ? window.location.origin : ""));
 
   const refresh = useCallback(async () => {
+    if (!adminToken.trim()) return;
     try {
-      const res = await fetch("/api/apikeys", { cache: "no-store" });
+      const res = await fetch("/api/apikeys", {
+        cache: "no-store",
+        headers: adminHeaders(adminToken.trim()),
+      });
+      if (res.status === 401 || res.status === 503) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        toast({ title: "Admin token required", description: body.error ?? `HTTP ${res.status}`, tone: "danger" });
+        return;
+      }
       if (!res.ok) return;
       setItems((await res.json()) as ApiKeyItem[]);
     } catch {
       toast({ title: "Could not load API keys", tone: "danger" });
     }
-  }, []);
+  }, [adminToken]);
 
   useEffect(() => {
-    if (team) void refresh();
-  }, [team, refresh]);
+    if (team && adminToken.trim()) void refresh();
+  }, [team, adminToken, refresh]);
 
   const generate = async () => {
     setBusy(true);
     try {
       const res = await fetch("/api/apikeys", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: adminHeaders(adminToken.trim(), true),
         body: JSON.stringify({ label }),
       });
       const body = (await res.json()) as ApiKeyItem & { ok: boolean; error?: string };
       if (!res.ok || !body.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      setNewKey(body.key);
+      setNewKey(body.key ?? null);
       setLabel("");
       await refresh();
       toast({ title: "API key generated", description: "Copy it now — it is shown in full once.", tone: "success" });
@@ -518,7 +535,10 @@ function ApiKeysSection({ team, onUpgrade }: { team: boolean; onUpgrade: () => v
 
   const remove = async (id: string) => {
     try {
-      const res = await fetch(`/api/apikeys?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const res = await fetch(`/api/apikeys?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: adminHeaders(adminToken.trim()),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setItems((prev) => prev.filter((i) => i.id !== id));
       toast({ title: "Key revoked", tone: "success" });
@@ -536,7 +556,7 @@ function ApiKeysSection({ team, onUpgrade }: { team: boolean; onUpgrade: () => v
     }
   };
 
-  const maskKey = (k: string) => `${k.slice(0, 9)}…${k.slice(-4)}`;
+  const displayKey = (k: ApiKeyItem) => k.masked || k.key || "skos_…";
   const exampleCurl = `curl -X POST ${origin || "https://your-shipos"}/api/v1/audit -H "x-api-key: skos_..." -H "Content-Type: application/json" -d '{"repoUrl":"https://github.com/owner/repo"}'`;
 
   const content = (
@@ -552,6 +572,14 @@ function ApiKeysSection({ team, onUpgrade }: { team: boolean; onUpgrade: () => v
             <span className="break-all font-mono">{newKey}</span>
           </Alert>
         )}
+        <TextField
+          label="Admin token"
+          type="password"
+          value={adminToken}
+          onChange={(e) => setAdminToken(e.target.value)}
+          hint="Must match SHIPOS_ADMIN_TOKEN. Required to list, create, or revoke keys."
+          className="font-mono"
+        />
         <div className="flex flex-col gap-2 sm:flex-row">
           <TextField
             label="Key label"
@@ -572,12 +600,11 @@ function ApiKeysSection({ team, onUpgrade }: { team: boolean; onUpgrade: () => v
             <div key={k.id} className="flex flex-wrap items-center gap-2 rounded-small bg-surface-container-low p-3">
               <Icon icon={KeyRound} size="sm" className="shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-body-sm text-on-surface">{maskKey(k.key)}</p>
+                <p className="truncate font-mono text-body-sm text-on-surface">{displayKey(k)}</p>
                 <p className="font-mono text-label-sm text-on-surface-variant">
                   {k.label} · {k.usageCount} call{k.usageCount === 1 ? "" : "s"} · {format(new Date(k.createdAt), "MMM d")}
                 </p>
               </div>
-              <IconButton icon={Copy} label={`Copy key ${k.label}`} size="sm" onClick={() => void copy(k.key, "API key")} />
               <IconButton icon={Trash2} label={`Revoke key ${k.label}`} size="sm" onClick={() => void remove(k.id)} />
             </div>
           ))}

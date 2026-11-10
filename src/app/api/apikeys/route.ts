@@ -1,32 +1,49 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import {
+  authorizeAdminFromRequest,
+  migratedApiKeyFields,
+  newApiKey,
+  storedApiKeyFields,
+  toCreatedApiKey,
+  toPublicApiKey,
+} from "@/lib/shipos/api-keys.mjs";
 
 export const runtime = "nodejs";
 
-function newKey(): string {
-  const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let core = "";
-  for (let i = 0; i < 32; i++) core += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return `skos_${core}`;
+async function requireAdmin(req: Request) {
+  const auth = authorizeAdminFromRequest(req);
+  if (!auth.ok) {
+    return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  }
+  return null;
 }
 
-/** GET /api/apikeys — list keys (key material masked except last 4). */
-export async function GET() {
+async function maybeMigrate(record: { id: string; key: string; keyPrefix: string; keyLast4: string }) {
+  const next = migratedApiKeyFields(record);
+  if (!next) return record;
+  return db.apiKey.update({ where: { id: record.id }, data: next });
+}
+
+/** GET /api/apikeys — list keys with secret material masked. */
+export async function GET(req: Request) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+
   const items = await db.apiKey.findMany({ orderBy: { createdAt: "desc" } });
-  return NextResponse.json(
-    items.map((k) => ({
-      id: k.id,
-      key: k.key,
-      label: k.label,
-      usageCount: k.usageCount,
-      lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
-      createdAt: k.createdAt.toISOString(),
-    }))
-  );
+  const published: ReturnType<typeof toPublicApiKey>[] = [];
+  for (const item of items) {
+    const record = await maybeMigrate(item);
+    published.push(toPublicApiKey(record));
+  }
+  return NextResponse.json(published);
 }
 
-/** POST /api/apikeys — generate a key. body: { label } */
+/** POST /api/apikeys — generate a key. body: { label }. Full secret is returned only here. */
 export async function POST(req: Request) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+
   let body: { label?: string };
   try {
     body = await req.json();
@@ -38,20 +55,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Key limit reached (5). Delete one first." }, { status: 409 });
   }
   const label = (body.label ?? "").trim().slice(0, 40) || "default";
-  const item = await db.apiKey.create({ data: { key: newKey(), label } });
-  return NextResponse.json({
-    ok: true,
-    id: item.id,
-    key: item.key,
-    label: item.label,
-    usageCount: 0,
-    lastUsedAt: null,
-    createdAt: item.createdAt.toISOString(),
+  const secret = newApiKey();
+  const item = await db.apiKey.create({
+    data: { ...storedApiKeyFields(secret), label },
   });
+  return NextResponse.json(toCreatedApiKey(item, secret));
 }
 
 /** DELETE /api/apikeys?id=... */
 export async function DELETE(req: Request) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
   try {

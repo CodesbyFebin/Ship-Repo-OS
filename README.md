@@ -90,6 +90,7 @@ See the [Workbench guide](docs/workbench.md) for evidence inputs, score calculat
 | `DATABASE_URL` | Prisma SQLite database. The sample value is `file:./db/custom.db`. Use an absolute SQLite path for standalone deployment. | For the server |
 | `GITHUB_TOKEN` | Optional token used by the [GitHub scraper](src/lib/shipos/scrape.ts) for authenticated API requests. Keep it server-side. | No |
 | `OPENAI_API_KEY` | Listed as an optional example in `.env.example`. The current [LLM bridge](src/lib/shipos/llm.ts) initializes the ZAI SDK. | No |
+| `SHIPOS_ADMIN_TOKEN` | Protects `/api/apikeys`. Requests must send the token as `x-shipos-admin-token` or `Authorization: Bearer <token>`. If unset, those routes return 503. | To manage API keys |
 
 ### Troubleshooting
 
@@ -195,6 +196,18 @@ curl -X POST http://localhost:3000/api/optimize \
 
 Job creation returns `{ ok, id }`. Poll `GET /api/projects/:id` for a full package. For the other examples, poll `GET /api/audit/:id`, `GET /api/demo/:id`, or `GET /api/optimize/:id` and read `status` and `stage`. Download a finished full package at `GET /api/projects/:id/export`.
 
+`/api/v1/audit` accepts `x-api-key: skos_...`. Managing those keys requires `SHIPOS_ADMIN_TOKEN`:
+
+```bash
+# List masked keys
+curl http://localhost:3000/api/apikeys -H "x-shipos-admin-token: $SHIPOS_ADMIN_TOKEN"
+
+# Create a key (the full secret is returned only in this response)
+curl -X POST http://localhost:3000/api/apikeys   -H "x-shipos-admin-token: $SHIPOS_ADMIN_TOKEN"   -H "content-type: application/json"   -d '{"label":"ci-bot"}'
+```
+
+After pulling this schema change, run `bun run db:push`. If a previous database still has plaintext keys, run `node scripts/migrate-apikeys.mjs` (or let `/api/v1/audit` hash a legacy key on first successful use).
+
 ## Testing and continuous integration
 
 ```bash
@@ -216,7 +229,7 @@ To publish a GitHub release, dispatch the [release workflow](.github/workflows/r
 
 ## Security
 
-Run the server as a trusted single-instance demo. The shared job, project, and demo license APIs require an authentication and authorization layer for public multi-tenant use. Keep live credentials out of source control and report vulnerabilities privately using the [security policy](SECURITY.md).
+Run the server as a trusted single-instance demo. The shared job, project, and demo license APIs require an authentication and authorization layer for public multi-tenant use. `/api/apikeys` is an exception: it requires `SHIPOS_ADMIN_TOKEN` and never lists full key material. Keep live credentials out of source control and report vulnerabilities privately using the [security policy](SECURITY.md).
 
 ## Repository statistics
 

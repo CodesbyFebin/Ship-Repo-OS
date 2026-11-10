@@ -116,9 +116,13 @@ model ScheduledAudit {
 }
 
 /// Public API keys (PRO TEAM feature) for /api/v1/audit.
+/// `key` stores the SHA-256 hex digest of the secret. Prefix and last 4 are
+/// display-only; the full secret is returned once, at creation.
 model ApiKey {
   id         String   @id @default(cuid())
   key        String   @unique
+  keyPrefix  String   @default("")
+  keyLast4   String   @default("")
   label      String
   usageCount Int      @default(0)
   lastUsedAt DateTime?
