@@ -12,7 +12,7 @@ import { ingestRepo, RepoNotFoundError } from "./ingest";
 import { runAuditJob } from "./repo-auditor";
 import { normalizeRepoUrl } from "./ingest";
 import type { AuditRepoMeta, RepoAudit } from "./audit-types";
-import { buildDemoScript, enhanceDemoVo, type DemoStyle, type DemoTarget, type DemoVoice } from "./demo-engine";
+import { buildDemoScript, enhanceDemoVo, installCommand, type DemoStyle, type DemoTarget, type DemoVoice } from "./demo-engine";
 import type { VideoScript } from "./story-engine";
 
 export type DemoJobParams = {
@@ -96,18 +96,6 @@ function modulesOfRunner(repo: Awaited<ReturnType<typeof ingestRepo>>): string[]
   return [...dirs, ...files].slice(0, 8);
 }
 
-function installCmdOf(repo: Awaited<ReturnType<typeof ingestRepo>>): string {
-  const pm = repo.detected.packageManager;
-  if (pm === "pnpm") return "pnpm install && pnpm dev";
-  if (pm === "yarn") return "yarn && yarn dev";
-  if (pm === "bun") return "bun install && bun dev";
-  if (pm === "npm" || repo.manifest) return "npm install && npm run dev";
-  if (repo.rootFiles.some((f) => /^cargo\.toml$/i.test(f))) return "cargo run";
-  if (repo.rootFiles.some((f) => /^go\.mod$/i.test(f))) return "go run .";
-  if (repo.rootFiles.some((f) => /^pyproject\.toml$/i.test(f))) return "pip install -e .";
-  return "clone, configure, run";
-}
-
 function testCmdOf(repo: Awaited<ReturnType<typeof ingestRepo>>): string {
   const s = repo.detected.scripts ?? {};
   if (s.test) return s.test.slice(0, 60);
@@ -143,7 +131,7 @@ function buildDemoMeta(repo: Awaited<ReturnType<typeof ingestRepo>>, audit: Repo
     modules: modulesOfRunner(repo),
     frameworks: repo.detected.frameworks.slice(0, 4),
     version: repo.manifest?.version ?? null,
-    installCmd: installCmdOf(repo),
+    installCmd: installCommand(repo),
     testCmd: testCmdOf(repo),
     contributors: repo.contributors.length,
     commitCount: repo.commitCount,

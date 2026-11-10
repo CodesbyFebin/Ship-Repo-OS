@@ -48,6 +48,7 @@ import {
 import type { AuditJobListItem, AuditJobResponse, AuditRepoMeta, RepoAudit } from "@/lib/shipos/audit-types";
 import { buildVideoBrief, buildVideoScript, formatSrt, formatVtt, sceneAt, scriptCaptions, type VideoScript } from "@/lib/shipos/story-engine";
 import { drawCinemaFrame, type CinemaFacts } from "@/lib/shipos/cinema-canvas";
+import { downloadRecording, startCanvasRecording } from "@/lib/shipos/canvas-recording.mjs";
 import { copyText, downloadText, fmtClock, loadStoryJson, saveStoryJson } from "../auditor/story/story-utils";
 import { interactive } from "@/ui/state-layer";
 import { SchemaEditor } from "./schema-editor";
@@ -184,7 +185,8 @@ export function VideoStudio({
   const lastSceneRef = useRef<string | null>(null);
   const lastUiPush = useRef(0);
   const audioRef = useRef<{ ctx: AudioContext; gain: GainNode; oscs: OscillatorNode[]; dest: MediaStreamAudioDestinationNode } | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<ReturnType<typeof startCanvasRecording> | null>(null);
+  useEffect(() => { recorderRef.current?.cancel(); }, [job?.id]);
 
   const facts = useMemo(() => (job ? factsFromJob(job) : null), [job]);
   useEffect(() => {
@@ -263,7 +265,7 @@ export function VideoStudio({
 
   const speakScene = useCallback(
     (sceneId: string) => {
-      if (!speakOn) return;
+      if (!speakOn || recorderRef.current) return;
       const scene = scriptRef.current.scenes.find((s) => s.id === sceneId);
       if (!scene || typeof window === "undefined" || !window.speechSynthesis) return;
       cancelTts();
@@ -296,10 +298,7 @@ export function VideoStudio({
           playingRef.current = false;
           setPlaying(false);
           cancelTts();
-          stopMusic();
-          if (recorderRef.current && recorderRef.current.state === "recording") {
-            recorderRef.current.stop();
-          }
+          if (!recorderRef.current) stopMusic();
         }
       }
       const cv = canvasRef.current;
@@ -317,6 +316,7 @@ export function VideoStudio({
           });
         }
       }
+      if (s && timeRef.current >= s.totalDuration && recorderRef.current) recorderRef.current.finish();
       if (ts - lastUiPush.current > 120) {
         lastUiPush.current = ts;
         setTime(timeRef.current);
@@ -328,6 +328,7 @@ export function VideoStudio({
   }, [speakScene, cancelTts, stopMusic]);
 
   const togglePlay = () => {
+    if (recorderRef.current) return;
     if (!script.scenes.length) return;
     const next = !playingRef.current;
     if (next && timeRef.current >= total - 0.01) {
@@ -350,6 +351,7 @@ export function VideoStudio({
   };
 
   const restart = () => {
+    if (recorderRef.current) return;
     timeRef.current = 0;
     lastSceneRef.current = null;
     setTime(0);
@@ -357,77 +359,73 @@ export function VideoStudio({
   };
 
   const seek = (t: number) => {
+    if (recorderRef.current) return;
     timeRef.current = Math.max(0, Math.min(total, t));
     lastSceneRef.current = null;
     setTime(timeRef.current);
     cancelTts();
   };
 
-  // ── WebM recorder (Path A export) ──────────────────────────────────────────
-  const recordWebm = () => {
-    const cv = canvasRef.current;
-    if (!cv || !script.scenes.length || recording) return;
-    if (typeof MediaRecorder === "undefined") {
-      toast({ title: "Recording unavailable", description: "This browser does not expose MediaRecorder.", tone: "danger" });
-      return;
-    }
-    try {
-      const stream = cv.captureStream(30);
-      // ensure the music bed exists so the export carries the cinematic score
-      startMusic();
-      const a = audioRef.current;
-      if (a) a.dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+  // Browser export owns its capture stream and discards interrupted cuts.
+  useEffect(() => () => {
+    const recording = recorderRef.current;
+    recorderRef.current = null;
+    recording?.cancel();
+    playingRef.current = false;
+    cancelTts();
+    stopMusic();
+  }, [cancelTts, stopMusic]);
 
-      const mime = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
-      const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: res === "4k" ? 24_000_000 : res === "1080p" ? 10_000_000 : 5_000_000 } : undefined);
-      const blobChunks: Blob[] = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) blobChunks.push(e.data);
-      };
-      rec.onstop = () => {
-        const blob = new Blob(blobChunks, { type: "video/webm" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${job?.repo ?? "shipos"}-story-${res}.webm`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        recorderRef.current = null;
-        setRecording(false);
-        cancelTts();
-        stopMusic();
-        toast({ title: "WebM exported", description: `${(blob.size / 1_048_576).toFixed(1)} MB · visuals + cinematic score.`, tone: "success" });
-      };
-      recorderRef.current = rec;
-      // play from the top at 1x for a true cut
-      speedRef.current = 1;
-      setSpeed(1);
+  const recordVideo = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !script?.scenes.length || !Number.isFinite(total) || total <= 0 || recorderRef.current) return;
+    try {
+      cancelTts();
+      startMusic();
+      const audioTrack = audioRef.current?.dest.stream.getAudioTracks()[0];
+      const videoBitsPerSecond = res === "4k" ? 24_000_000 : res === "1080p" ? 10_000_000 : 5_000_000;
       timeRef.current = 0;
+      setTime(0);
       lastSceneRef.current = null;
-      rec.start(250);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("The video canvas is unavailable.");
+      drawCinemaFrame(context, canvas.width, canvas.height, {
+        script, time: 0, facts: factsRef.current, ...optsRef.current,
+      });
+      const capture = startCanvasRecording(canvas, { audioTrack, videoBitsPerSecond });
+      recorderRef.current = capture;
+      speedRef.current = 1;
       setRecording(true);
       playingRef.current = true;
       setPlaying(true);
-      const { scene } = sceneAt(script, 0);
-      if (scene) {
-        lastSceneRef.current = scene.id;
-        speakScene(scene.id);
-      }
-    } catch {
-      setRecording(false);
-      toast({ title: "Recorder failed", description: "Canvas capture is blocked in this context.", tone: "danger" });
+      void capture.done.then((result) => {
+        if (recorderRef.current !== capture) return;
+        recorderRef.current = null;
+        speedRef.current = speed;
+        playingRef.current = false;
+        setPlaying(false);
+        setRecording(false);
+        stopMusic();
+        if (result.status === "ready") {
+          try {
+            downloadRecording(result.blob, `${job?.repo ?? "shipos"}-story-${res}.${result.extension}`);
+            toast({ title: "Video exported", description: `${(result.blob.size / 1_048_576).toFixed(1)} MB`, tone: "success" });
+          } catch {
+            toast({ title: "Download failed", description: "The browser could not download the exported video.", tone: "danger" });
+          }
+        } else if (result.status === "error") {
+          toast({ title: "Export interrupted", description: result.message, tone: "danger" });
+        }
+      });
+    } catch (error) {
+      stopMusic();
+      playingRef.current = false;
+      setPlaying(false);
+      toast({ title: "Recorder failed", description: error instanceof Error ? error.message : "Canvas recording could not start.", tone: "danger" });
     }
   };
 
-  const cancelRecording = () => {
-    if (recorderRef.current && recorderRef.current.state === "recording") recorderRef.current.stop();
-    playingRef.current = false;
-    setPlaying(false);
-    cancelTts();
-    stopMusic();
-  };
+  const cancelRecording = () => recorderRef.current?.cancel();
 
   // ── Render Cloud bridge (Path B) ───────────────────────────────────────────
   const sendToCloud = async () => {
@@ -549,7 +547,7 @@ export function VideoStudio({
             {/* timeline */}
             <div className="flex flex-col gap-1.5">
               <Slider
-                label="Timeline scrubber"
+                label="Timeline scrubber" disabled={recording}
                 hideLabel
                 min={0}
                 max={Math.max(1, total)}
@@ -577,15 +575,15 @@ export function VideoStudio({
 
             {/* transport + options */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button size="xs" className="w-[92px]" icon={playing ? Pause : Play} onClick={togglePlay}>
+              <Button size="xs" className="w-[92px]" icon={playing ? Pause : Play} onClick={togglePlay} disabled={recording}>
                 {playing ? "Pause" : "Play"}
               </Button>
-              <Button size="xs" variant="outlined" icon={RotateCcw} onClick={restart}>
+              <Button size="xs" variant="outlined" icon={RotateCcw} onClick={restart} disabled={recording}>
                 Restart
               </Button>
               <div className="flex items-center gap-2">
                 <Slider
-                  label="Playback speed"
+                  label="Playback speed" disabled={recording}
                   hideLabel
                   min={0.5}
                   max={2}
@@ -605,7 +603,7 @@ export function VideoStudio({
               <div className="flex items-center gap-1.5">
                 <Icon icon={Music} size="sm" className="text-on-surface-variant" />
                 <Slider
-                  label="Music volume"
+                  label="Music volume" disabled={recording}
                   hideLabel
                   min={0}
                   max={100}
@@ -615,7 +613,7 @@ export function VideoStudio({
                 />
               </div>
               <Select
-                label="Resolution"
+                label="Resolution" disabled={recording}
                 dense
                 className="w-[190px]"
                 value={res}
@@ -640,12 +638,12 @@ export function VideoStudio({
             <div className="flex flex-wrap gap-1.5">
               {[
                 { on: captionsOn, set: setCaptionsOn, icon: Type, label: "Captions" },
-                { on: speakOn, set: setSpeakOn, icon: Mic, label: "Voiceover" },
+                { on: speakOn, set: setSpeakOn, icon: Mic, label: "Preview voice" },
                 { on: kenBurns, set: setKenBurns, icon: Sparkles, label: "Ken Burns" },
                 { on: neon, set: setNeon, icon: Sparkles, label: "Neon grade" },
                 { on: grain, set: setGrain, icon: Sparkles, label: "Film grain" },
               ].map((t) => (
-                <Chip key={t.label} kind="filter" selected={t.on} icon={t.icon} onClick={() => t.set(!t.on)}>
+                <Chip key={t.label} kind="filter" selected={t.on} icon={t.icon} onClick={() => { if (!recorderRef.current) t.set(!t.on); }}>
                   {t.label}
                 </Chip>
               ))}
@@ -656,11 +654,11 @@ export function VideoStudio({
               <div className="flex flex-wrap items-center gap-2">
                 {recording ? (
                   <Button size="xs" variant="danger" icon={Square} onClick={cancelRecording}>
-                    Stop recording
+                    Cancel export
                   </Button>
                 ) : (
-                  <Button size="xs" icon={Download} onClick={recordWebm} disabled={!script.scenes.length}>
-                    Download WebM
+                  <Button size="xs" icon={Download} onClick={recordVideo} disabled={!script.scenes.length}>
+                    Export video
                   </Button>
                 )}
                 <Button size="xs" variant="outlined" icon={Copy} onClick={() => void copyText(srt, "captions.srt")}>
@@ -685,8 +683,7 @@ export function VideoStudio({
                 </Button>
               </div>
               <p className="text-label-sm leading-relaxed text-on-surface-variant">
-                WebM export = canvas visuals + generated cinematic score (browsers don&apos;t expose TTS audio to recorders — the studio voiceover narrates live,
-                and the Render Cloud worker mixes the real VO). Schema JSON drops straight into Path B.
+                Browser export includes canvas visuals and the generated music bed when available. Preview narration plays only in the browser. Keep this tab visible during export.
               </p>
             </Card>
 
@@ -709,7 +706,7 @@ export function VideoStudio({
 
           {/* ── right: schema editor ──────────────────────────────────────── */}
           <div className="min-h-[420px] lg:max-h-[calc(100vh-220px)]">
-            <SchemaEditor script={script} baseScript={baseScript} onChange={setScript} onSave={saveScript} saved={savedFlag} />
+            <SchemaEditor script={script} baseScript={baseScript} onChange={(next) => { if (!recorderRef.current) setScript(next); }} onSave={saveScript} saved={savedFlag} />
           </div>
         </div>
       )}

@@ -53,12 +53,12 @@ function fmtNum(n: number): string {
 }
 
 export function installCommand(repo: RepoData): string {
-  const pm = repo.detected.packageManager;
-  if (pm === "pnpm") return "pnpm install && pnpm dev";
-  if (pm === "yarn") return "yarn && yarn dev";
-  if (pm === "bun") return "bun install && bun dev";
-  if (pm === "npm") return "npm install && npm run dev";
-  if (repo.manifest) return "npm install && npm run dev";
+  const pm = repo.detected.packageManager ?? (repo.manifest ? "npm" : null);
+  if (pm === "pnpm" || pm === "yarn" || pm === "bun" || pm === "npm") {
+    const script = ["dev", "start", "serve"].find((name) => repo.detected.scripts?.[name] || repo.manifest?.scripts?.[name]);
+    const install = `${pm} install`;
+    return script ? `${install} && ${pm} run ${script}` : install;
+  }
   if (repo.rootFiles.some((f) => /^cargo\.toml$/i.test(f))) return "cargo run";
   if (repo.rootFiles.some((f) => /^go\.mod$/i.test(f))) return "go run .";
   if (repo.rootFiles.some((f) => /^pyproject\.toml$/i.test(f))) return "pip install -e .";
@@ -126,7 +126,7 @@ const TEMPLATES: SceneTemplate[] = [
         `${c.name}.`,
         c.repo.description ? `In one line: ${c.repo.description.replace(/\.$/, "")}.` : `A ${c.repo.detected.language} project built in the open.`,
         HOOK_LINE[c.style],
-        `${fmtNum(c.repo.stars)} stars say it lands. This film shows why — in ${Math.round(dur)} seconds.`,
+        `This cut shows the project’s purpose and what the repository documents.`,
       ],
       onScreen: [c.repo.detected.language, c.repo.license?.spdx ?? "unlicensed", `${fmtNum(c.repo.stars)} stars`],
     }),
