@@ -45,6 +45,7 @@ Start with a repository URL for the live engines or run GitHub Workbench on loca
 | **Competitor Radar** | Bundled November 8 snapshot of 15 repo-to-video tools, five categories, an 11-capability matrix, four patterns, and six roadmap opportunities. | [Competitor data](src/lib/shipos/competitors.ts) |
 | **Model Radar** | Browsable bundled catalog of open and free model options, with capability filters. | [Model data](src/lib/shipos/hf-models.ts) |
 | **PRO** | Demo tier for the 4K render flow, audit schedule records, team seats, and API-key management for `/api/v1/audit`. | [PRO API](src/app/api/pro/route.ts) · [Public audit API](src/app/api/v1/audit/route.ts) |
+| **Evidence engine (P0)** | Builds an Engineering Index quality profile (proposed weights, no silent points), GitHub security and workflow intelligence, and acceptance gates G0, G6, and G7. Untested gates stay `NOT_VERIFIED`. | [Evidence engine](src/lib/shipos/evidence-engine/) · [CLI](scripts/evidence.mjs) · [API](src/app/api/v1/evidence/route.ts) |
 
 ### Publishing media
 
@@ -90,6 +91,7 @@ See the [Workbench guide](docs/workbench.md) for evidence inputs, score calculat
 | `DATABASE_URL` | Prisma SQLite database. The sample value is `file:./db/custom.db`. Use an absolute SQLite path for standalone deployment. | For the server |
 | `GITHUB_TOKEN` | Optional token used by the [GitHub scraper](src/lib/shipos/scrape.ts) for authenticated API requests. Keep it server-side. | No |
 | `OPENAI_API_KEY` | Listed as an optional example in `.env.example`. The current [LLM bridge](src/lib/shipos/llm.ts) initializes the ZAI SDK. | No |
+| `SHIPOS_EVIDENCE_HMAC_KEY` | Optional HMAC key used to sign evidence receipts. Receipts still include a content hash when this is unset. | No |
 
 ### Troubleshooting
 
@@ -168,6 +170,7 @@ Run each script as `bun run <script>`. See [package.json](package.json) for its 
 | `db:migrate` | `prisma migrate dev` |
 | `db:reset` | `prisma migrate reset`. This resets the configured database. |
 | `workbench` | `node scripts/workbench.mjs` |
+| `evidence` | `node scripts/evidence.mjs` |
 
 ## API examples
 
@@ -191,7 +194,14 @@ curl -X POST http://localhost:3000/api/demo \
 curl -X POST http://localhost:3000/api/optimize \
   -H 'content-type: application/json' \
   -d '{"repoUrl":"https://github.com/honojs/hono"}'
+
+# Evidence engine (quality profile, optional URL fetches, artifact hashes, receipt)
+curl -X POST http://localhost:3000/api/v1/evidence \
+  -H 'content-type: application/json' \
+  -d '{"action":"profile","snapshot":{"files":{"README.md":"# Example"}}}'
 ```
+
+Evaluate a local checkout with `node scripts/evidence.mjs suite --root .`. Gate G0 also accepts `--repo-url` and `--live-url`. Artifact verification is `node scripts/evidence.mjs g6 --sums SHA256SUMS --dir ./dist`.
 
 Job creation returns `{ ok, id }`. Poll `GET /api/projects/:id` for a full package. For the other examples, poll `GET /api/audit/:id`, `GET /api/demo/:id`, or `GET /api/optimize/:id` and read `status` and `stage`. Download a finished full package at `GET /api/projects/:id/export`.
 
